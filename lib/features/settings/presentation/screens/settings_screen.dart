@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -355,7 +355,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
             child: ElevatedButton.icon(
               onPressed: () => _chooseFolder(context, ref),
               icon: const Icon(Icons.folder_open_rounded, size: 16),
-              label: const Text('Choose New Folder'),
+              label: const Text('Use Device Storage'),
             ),
           ),
           const SizedBox(height: 12),
@@ -377,11 +377,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
       final hasPermission = await _ensureStoragePermission(context);
       if (!hasPermission) return;
 
-      final path = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Choose Lokus storage folder',
-      );
-      if (path == null) return;
-
+      final path = await _defaultStoragePath();
       await _ensureWritableFolder(path);
       await ref.read(storageServiceProvider).updateStorageFolder(
             folderUri: path,
@@ -421,5 +417,15 @@ class _ChangeFolderSheet extends ConsumerWidget {
 
   Future<bool> _ensureStoragePermission(BuildContext context) async {
     return true;
+  }
+
+  Future<String> _defaultStoragePath() async {
+    final baseDir = Platform.isAndroid
+        ? await getExternalStorageDirectory()
+        : await getApplicationDocumentsDirectory();
+    if (baseDir == null) {
+      throw FileSystemException('Device storage is not available.');
+    }
+    return '${baseDir.path}/Lokus';
   }
 }

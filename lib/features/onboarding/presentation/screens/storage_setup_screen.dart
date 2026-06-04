@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../services/storage_service.dart';
 import '../../../../shared/theme/app_theme.dart';
@@ -75,7 +75,7 @@ class StorageSetupScreen extends ConsumerWidget {
                   Expanded(
                     child: _FolderButton(
                       icon: Icons.folder_open_rounded,
-                      label: 'Choose Folder',
+                      label: 'Use Device Storage',
                       onTap: () => _pickFolder(context, ref),
                     ),
                   ),
@@ -83,7 +83,7 @@ class StorageSetupScreen extends ConsumerWidget {
                   Expanded(
                     child: _FolderButton(
                       icon: Icons.create_new_folder_outlined,
-                      label: 'New Folder',
+                      label: 'Create Lokus Folder',
                       onTap: () => _createNewFolder(context, ref),
                     ),
                   ),
@@ -140,11 +140,7 @@ class StorageSetupScreen extends ConsumerWidget {
       final hasPermission = await _ensureStoragePermission(context);
       if (!hasPermission) return;
 
-      final path = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Choose Lokus storage folder',
-      );
-      if (path == null) return;
-
+      final path = await _defaultStoragePath();
       await _ensureWritableFolder(path);
       ref.read(_selectedPathProvider.notifier).state = path;
       ref.read(_selectedUriProvider.notifier).state = path;
@@ -158,54 +154,19 @@ class StorageSetupScreen extends ConsumerWidget {
   }
 
   Future<void> _createNewFolder(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController(text: 'Lokus');
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceElevated,
-        title: const Text('Create New Folder'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Folder Name',
-            hintText: 'Lokus',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null && result.isNotEmpty) {
-      if (!context.mounted) return;
+    try {
       final hasPermission = await _ensureStoragePermission(context);
       if (!hasPermission) return;
 
-      final picked = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Choose parent location',
-      );
-      if (picked != null) {
-        try {
-          final newPath = '${picked.replaceFirst(RegExp(r'/$'), '')}/$result';
-          await _ensureWritableFolder(newPath);
-          ref.read(_selectedPathProvider.notifier).state = newPath;
-          ref.read(_selectedUriProvider.notifier).state = newPath;
-        } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to create folder: $e')),
-            );
-          }
-        }
+      final path = await _defaultStoragePath();
+      await _ensureWritableFolder(path);
+      ref.read(_selectedPathProvider.notifier).state = path;
+      ref.read(_selectedUriProvider.notifier).state = path;
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create storage folder: $e')),
+        );
       }
     }
   }
@@ -257,6 +218,16 @@ class StorageSetupScreen extends ConsumerWidget {
 
   Future<bool> _ensureStoragePermission(BuildContext context) async {
     return true;
+  }
+
+  Future<String> _defaultStoragePath() async {
+    final baseDir = Platform.isAndroid
+        ? await getExternalStorageDirectory()
+        : await getApplicationDocumentsDirectory();
+    if (baseDir == null) {
+      throw FileSystemException('Device storage is not available.');
+    }
+    return '${baseDir.path}/Lokus';
   }
 }
 
