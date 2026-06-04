@@ -29,7 +29,7 @@ class ModelLogo extends StatelessWidget {
           ? Image.asset(
               value,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
+              errorBuilder: (_, __, ___) => Icon(
                 Icons.memory_rounded,
                 color: AppTheme.textSecondary,
               ),

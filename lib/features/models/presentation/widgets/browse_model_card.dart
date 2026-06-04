@@ -24,9 +24,9 @@ class BrowseModelCard extends ConsumerWidget {
     final status = statuses[model.id] ?? latestModel.status;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: 8),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppTheme.surface,
           borderRadius: BorderRadius.circular(8),
@@ -36,7 +36,7 @@ class BrowseModelCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ModelLogo(value: model.providerIcon, size: 42),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,7 +49,7 @@ class BrowseModelCard extends ConsumerWidget {
                           children: [
                             Text(
                               model.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: AppTheme.textPrimary,
@@ -57,10 +57,10 @@ class BrowseModelCard extends ConsumerWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 4),
+                            SizedBox(height: 4),
                             Text(
                               '${model.provider} · ${model.categoryLabel} · ${model.sizeString}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,
                                 height: 1.2,
@@ -68,10 +68,10 @@ class BrowseModelCard extends ConsumerWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 3),
+                            SizedBox(height: 3),
                             Text(
                               'Released ${DateFormat('MMM yyyy').format(model.releaseDate)}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
                                 color: AppTheme.textTertiary,
                                 height: 1.2,
@@ -176,7 +176,7 @@ class _ActionButton extends ConsumerWidget {
         );
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isActive ? AppTheme.accentSurface : AppTheme.surface,
           borderRadius: BorderRadius.circular(8),
@@ -246,7 +246,7 @@ class _DownloadProgress extends StatelessWidget {
         : '';
 
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
+      padding: EdgeInsets.only(top: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -263,40 +263,40 @@ class _DownloadProgress extends StatelessWidget {
               minHeight: 4,
             ),
           ),
-          const SizedBox(height: 5),
+          SizedBox(height: 5),
           Row(
             children: [
               Text(
                 '$pct%',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textSecondary,
                 ),
               ),
               if (speed.isNotEmpty) ...[
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   speed,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     color: AppTheme.textTertiary,
                   ),
                 ),
               ],
               if (eta.isNotEmpty) ...[
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   eta,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     color: AppTheme.textTertiary,
                   ),
                 ),
               ],
               if (model.status == ModelStatus.paused) ...[
-                const SizedBox(width: 8),
-                const Text(
+                SizedBox(width: 8),
+                Text(
                   'PAUSED',
                   style: TextStyle(
                     fontSize: 10,
@@ -329,12 +329,12 @@ class _DownloadError extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = message ?? 'Download failed. Tap retry to continue.';
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
+      padding: EdgeInsets.only(top: 10),
       child: Text(
         text,
         maxLines: 3,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           height: 1.35,
           color: AppTheme.error,

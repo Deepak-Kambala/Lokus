@@ -54,7 +54,7 @@ class _ShimmerBoxState extends State<ShimmerBox>
           gradient: LinearGradient(
             begin: Alignment(_anim.value - 1, 0),
             end: Alignment(_anim.value, 0),
-            colors: const [
+            colors: [
               AppTheme.surface,
               AppTheme.surfaceHighlight,
               AppTheme.surface,
@@ -78,7 +78,7 @@ class ErrorDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -89,27 +89,26 @@ class ErrorDisplay extends StatelessWidget {
                 color: AppTheme.error.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.error_outline_rounded,
+              child: Icon(Icons.error_outline_rounded,
                   color: AppTheme.error, size: 28),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Text(
               'Something went wrong',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: AppTheme.textSecondary, fontSize: 13),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
             ),
             if (onRetry != null) ...[
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('Try Again'),
+                icon: Icon(Icons.refresh_rounded, size: 16),
+                label: Text('Try Again'),
               ),
             ],
           ],
@@ -154,7 +153,7 @@ class SectionLabel extends StatelessWidget {
       padding: padding,
       child: Text(
         text.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: AppTheme.textTertiary,
@@ -176,7 +175,7 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(6),
@@ -265,7 +264,7 @@ class BottomSheetHandle extends StatelessWidget {
       child: Container(
         width: 36,
         height: 4,
-        margin: const EdgeInsets.symmetric(vertical: 12),
+        margin: EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: AppTheme.border,
           borderRadius: BorderRadius.circular(2),

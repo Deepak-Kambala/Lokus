@@ -6,11 +6,18 @@ final storageServiceProvider = Provider<StorageService>((ref) {
   return StorageService();
 });
 
+final appThemeModeProvider = StateProvider<String>((ref) {
+  return ref
+      .read(storageServiceProvider)
+      .getSetting<String>(HiveConstants.appTheme, defaultValue: 'Dark');
+});
+
 class StorageService {
   Box get _settingsBox => Hive.box(HiveConstants.settingsBox);
 
   bool get isOnboardingComplete =>
-      _settingsBox.get(HiveConstants.onboardingComplete, defaultValue: false) as bool;
+      _settingsBox.get(HiveConstants.onboardingComplete, defaultValue: false)
+          as bool;
 
   String? get storageFolderUri =>
       _settingsBox.get(HiveConstants.storageFolderUri) as String?;

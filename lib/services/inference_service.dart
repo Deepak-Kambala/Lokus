@@ -116,9 +116,15 @@ class InferenceService {
   }
 
   Future<void> unloadModel() async {
-    await _llama.unloadModel();
-    _loadedModel = null;
-    AppLog.debug('[Inference] Model unloaded');
+    try {
+      await _llama.unloadModel();
+      AppLog.debug('[Inference] Model unloaded');
+    } catch (e, stackTrace) {
+      AppLog.debug('[Inference] Unload skipped: $e');
+      AppLog.error('[Inference] Unload warning', e, stackTrace);
+    } finally {
+      _loadedModel = null;
+    }
   }
 
   Future<Object?> getGpuInfo() async {

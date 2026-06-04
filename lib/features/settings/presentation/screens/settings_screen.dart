@@ -12,7 +12,6 @@ import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/hive_constants.dart';
 import '../../../../services/storage_service.dart';
-import '../../../conversations/providers/conversations_provider.dart';
 import '../../../models/data/repositories/models_repository.dart';
 import '../../../models/providers/models_provider.dart';
 
@@ -30,16 +29,24 @@ class SettingsScreen extends ConsumerWidget {
       HiveConstants.appLanguage,
       defaultValue: 'Auto',
     );
+    final themeMode = storageService.getSetting<String>(
+      HiveConstants.appTheme,
+      defaultValue: 'Dark',
+    );
+    final activePrompt = storageService.getSetting<String>(
+      HiveConstants.activeSystemPromptTitle,
+      defaultValue: 'None',
+    );
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.background,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Settings'),
+        title: Text('Settings'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: AppTheme.border),
@@ -57,8 +64,10 @@ class SettingsScreen extends ConsumerWidget {
           _SettingsTile(
             icon: Icons.tune_rounded,
             title: 'System Prompts',
-            subtitle: 'Manage reusable system prompts',
-            onTap: () => _showSystemPromptsSheet(context),
+            subtitle: activePrompt == 'None'
+                ? 'Manage reusable prompts'
+                : activePrompt,
+            onTap: () => _showSystemPromptsSheet(context, ref),
           ),
           _SectionHeader('STORAGE'),
           _SettingsTile(
@@ -81,10 +90,10 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _showLanguageSheet(context, ref),
           ),
           _SettingsTile(
-            icon: Icons.upload_rounded,
-            title: 'Export Chats',
-            subtitle: 'Export conversations as JSON',
-            onTap: () => _exportChats(context, ref),
+            icon: Icons.contrast_rounded,
+            title: 'Theme Mode',
+            subtitle: themeMode,
+            onTap: () => _showThemeSheet(context, ref),
           ),
           _SectionHeader('INFO'),
           _SettingsTile(
@@ -103,19 +112,19 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: 'Lokus v${AppConstants.appVersion}',
             onTap: () => _showAboutSheet(context),
           ),
-          const SizedBox(height: 40),
+          SizedBox(height: 40),
           Center(
             child: Text(
               'Lokus ${AppConstants.appVersion}\nAll AI runs locally on device',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 color: AppTheme.textTertiary,
                 height: 1.6,
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: 32),
         ],
       ),
     );
@@ -126,7 +135,7 @@ class SettingsScreen extends ConsumerWidget {
     return path;
   }
 
-  void _showSystemPromptsSheet(BuildContext context) {
+  void _showSystemPromptsSheet(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -135,7 +144,10 @@ class SettingsScreen extends ConsumerWidget {
         maxChildSize: 0.9,
         minChildSize: 0.4,
         expand: false,
-        builder: (_, ctrl) => _SystemPromptsSheet(scrollController: ctrl),
+        builder: (_, ctrl) => _SystemPromptsSheet(
+          scrollController: ctrl,
+          ref: ref,
+        ),
       ),
     );
   }
@@ -151,6 +163,13 @@ class SettingsScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       builder: (ctx) => _LanguageSheet(ref: ref),
+    );
+  }
+
+  void _showThemeSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => _ThemeModeSheet(ref: ref),
     );
   }
 
@@ -171,29 +190,12 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportChats(BuildContext context, WidgetRef ref) async {
-    try {
-      final file = await ref
-          .read(conversationsRepositoryProvider)
-          .exportAllConversations();
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Chats exported to ${file.path}')),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Export failed: $e')),
-      );
-    }
-  }
-
   void _showPrivacySheet(BuildContext context) {
     _showInfoSheet(
       context: context,
       title: 'Privacy',
       icon: Icons.shield_outlined,
-      children: const [
+      children: [
         _InfoParagraph(
           'Lokus runs downloaded GGUF models on your device. Chats, selected folders, model files, and exports stay in local storage unless you manually share them.',
         ),
@@ -212,7 +214,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       title: 'FAQ',
       icon: Icons.help_outline_rounded,
-      children: const [
+      children: [
         _FaqItem(
           question: 'Why do I need to download a model first?',
           answer:
@@ -262,18 +264,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       title: 'About Lokus',
       icon: Icons.info_outline_rounded,
-      action: TextButton(
-        onPressed: () => showLicensePage(
-          context: context,
-          applicationName: AppConstants.appName,
-          applicationVersion: AppConstants.appVersion,
-          applicationIcon: const _AppMark(size: 44),
-        ),
-        child: const Text('View Licenses'),
-      ),
-      children: const [
-        Center(child: _AppMark(size: 64)),
-        SizedBox(height: 16),
+      children: [
         Center(
           child: Text(
             'Lokus',
@@ -336,10 +327,10 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 6),
+      padding: EdgeInsets.fromLTRB(16, 24, 16, 6),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: AppTheme.textTertiary,
@@ -385,7 +376,7 @@ class _SettingsTile extends StatelessWidget {
             )
           : null,
       trailing: onTap != null
-          ? const Icon(Icons.chevron_right_rounded,
+          ? Icon(Icons.chevron_right_rounded,
               size: 18, color: AppTheme.textTertiary)
           : null,
     );
@@ -421,7 +412,7 @@ class _StorageUsageSheetState extends State<_StorageUsageSheet> {
         future: _snapshotFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(
+            return Center(
               child: CircularProgressIndicator(strokeWidth: 2),
             );
           }
@@ -445,28 +436,28 @@ class _StorageUsageSheetState extends State<_StorageUsageSheet> {
 
           return ListView(
             controller: widget.scrollController,
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+            padding: EdgeInsets.fromLTRB(20, 12, 20, 28),
             children: [
               const _SheetHeader(
                 icon: Icons.storage_rounded,
                 title: 'Storage Usage',
               ),
-              const SizedBox(height: 18),
+              SizedBox(height: 18),
               _UsageHero(snapshot: data),
-              const SizedBox(height: 18),
+              SizedBox(height: 18),
               _MetricGrid(snapshot: data),
-              const SizedBox(height: 18),
+              SizedBox(height: 18),
               const _PanelTitle('Breakdown'),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               ...data.categories.map(
                 (category) => _StorageCategoryRow(
                   category: category,
                   totalBytes: data.totalBytes,
                 ),
               ),
-              const SizedBox(height: 18),
+              SizedBox(height: 18),
               const _PanelTitle('Location'),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               _PathPanel(path: data.path!),
             ],
           );
@@ -516,21 +507,21 @@ class _StorageUsageSheetState extends State<_StorageUsageSheet> {
           detail: '${chats.fileCount} files',
           bytes: chats.bytes,
           icon: Icons.chat_bubble_outline_rounded,
-          tone: const Color(0xFFD8D8DC),
+          tone: Color(0xFFD8D8DC),
         ),
         _StorageCategory(
           label: 'Exports',
           detail: '${exports.fileCount} files',
           bytes: exports.bytes,
           icon: Icons.upload_file_rounded,
-          tone: const Color(0xFFAFAFB5),
+          tone: Color(0xFFAFAFB5),
         ),
         _StorageCategory(
           label: 'Other',
           detail: 'Cache, metadata, partial files',
           bytes: otherBytes,
           icon: Icons.more_horiz_rounded,
-          tone: const Color(0xFF77777E),
+          tone: Color(0xFF77777E),
         ),
       ],
     );
@@ -579,7 +570,7 @@ class _UsageHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surfaceElevated,
         borderRadius: BorderRadius.circular(8),
@@ -588,7 +579,7 @@ class _UsageHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Local data',
             style: TextStyle(
               fontSize: 12,
@@ -596,16 +587,16 @@ class _UsageHero extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             _formatBytes(snapshot.totalBytes),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 30,
               color: AppTheme.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           _StackedUsageBar(snapshot: snapshot),
         ],
       ),
@@ -666,7 +657,7 @@ class _MetricGrid extends StatelessWidget {
             icon: Icons.insert_drive_file_outlined,
           ),
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         Expanded(
           child: _MetricBox(
             label: 'Folders',
@@ -693,7 +684,7 @@ class _MetricBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(8),
@@ -702,13 +693,13 @@ class _MetricBox extends StatelessWidget {
       child: Row(
         children: [
           Icon(icon, size: 18, color: AppTheme.textSecondary),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.textPrimary,
@@ -716,7 +707,7 @@ class _MetricBox extends StatelessWidget {
               ),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   color: AppTheme.textTertiary,
                 ),
@@ -744,8 +735,8 @@ class _StorageCategoryRow extends StatelessWidget {
     final percent = '${(ratio * 100).toStringAsFixed(ratio < 0.01 ? 1 : 0)}%';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(8),
@@ -763,7 +754,7 @@ class _StorageCategoryRow extends StatelessWidget {
             ),
             child: Icon(category.icon, size: 16, color: category.tone),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -773,7 +764,7 @@ class _StorageCategoryRow extends StatelessWidget {
                     Expanded(
                       child: Text(
                         category.label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: AppTheme.textPrimary,
@@ -782,7 +773,7 @@ class _StorageCategoryRow extends StatelessWidget {
                     ),
                     Text(
                       _formatBytes(category.bytes),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textSecondary,
@@ -790,15 +781,15 @@ class _StorageCategoryRow extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   '$percent  •  ${category.detail}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     color: AppTheme.textTertiary,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(3),
                   child: LinearProgressIndicator(
@@ -825,7 +816,7 @@ class _PathPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(8),
@@ -833,7 +824,7 @@ class _PathPanel extends StatelessWidget {
       ),
       child: SelectableText(
         path,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
           color: AppTheme.textSecondary,
           height: 1.4,
@@ -863,10 +854,10 @@ class _InfoSheet extends StatelessWidget {
     return _SheetShell(
       child: ListView(
         controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
           _SheetHeader(icon: icon, title: title, action: action),
-          const SizedBox(height: 18),
+          SizedBox(height: 18),
           ...children,
         ],
       ),
@@ -881,7 +872,7 @@ class _SheetShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -890,7 +881,7 @@ class _SheetShell extends StatelessWidget {
           Container(
             width: 36,
             height: 4,
-            margin: const EdgeInsets.only(top: 12),
+            margin: EdgeInsets.only(top: 12),
             decoration: BoxDecoration(
               color: AppTheme.border,
               borderRadius: BorderRadius.circular(2),
@@ -928,11 +919,11 @@ class _SheetHeader extends StatelessWidget {
           ),
           child: Icon(icon, size: 17, color: AppTheme.textPrimary),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
               color: AppTheme.textPrimary,
@@ -953,7 +944,7 @@ class _PanelTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12,
         color: AppTheme.textSecondary,
         fontWeight: FontWeight.w700,
@@ -970,8 +961,8 @@ class _InfoParagraph extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surfaceElevated,
         borderRadius: BorderRadius.circular(8),
@@ -979,7 +970,7 @@ class _InfoParagraph extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 13,
           height: 1.5,
           color: AppTheme.textSecondary,
@@ -1001,7 +992,7 @@ class _FaqItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: AppTheme.surfaceElevated,
         borderRadius: BorderRadius.circular(8),
@@ -1010,13 +1001,13 @@ class _FaqItem extends StatelessWidget {
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14),
-          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          tilePadding: EdgeInsets.symmetric(horizontal: 14),
+          childrenPadding: EdgeInsets.fromLTRB(14, 0, 14, 14),
           iconColor: AppTheme.textSecondary,
           collapsedIconColor: AppTheme.textTertiary,
           title: Text(
             question,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
               color: AppTheme.textPrimary,
@@ -1027,7 +1018,7 @@ class _FaqItem extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 answer,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   height: 1.5,
                   color: AppTheme.textSecondary,
@@ -1055,59 +1046,31 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(24),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 34, color: AppTheme.textTertiary),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textPrimary,
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 color: AppTheme.textSecondary,
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AppMark extends StatelessWidget {
-  final double size;
-  const _AppMark({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: AppTheme.accent,
-        borderRadius: BorderRadius.circular(size * 0.22),
-        border: Border.all(color: AppTheme.border),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        'LO',
-        style: TextStyle(
-          color: Colors.black,
-          fontSize: size * 0.35,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0,
         ),
       ),
     );
@@ -1214,11 +1177,11 @@ class _LanguageSheet extends StatelessWidget {
 
     return SafeArea(
       child: Container(
-        decoration: const BoxDecoration(color: AppTheme.surface),
+        decoration: BoxDecoration(color: AppTheme.surface),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Container(
               width: 36,
               height: 4,
@@ -1227,7 +1190,7 @@ class _LanguageSheet extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
@@ -1251,11 +1214,10 @@ class _LanguageSheet extends StatelessWidget {
                   return ListTile(
                     title: Text(language),
                     subtitle: language == 'Auto'
-                        ? const Text('Use the same language as the prompt')
+                        ? Text('Use the same language as the prompt')
                         : null,
                     trailing: isSelected
-                        ? const Icon(Icons.check_rounded,
-                            color: AppTheme.accent)
+                        ? Icon(Icons.check_rounded, color: AppTheme.accent)
                         : null,
                     onTap: () async {
                       await storage.setSetting(
@@ -1276,9 +1238,86 @@ class _LanguageSheet extends StatelessWidget {
   }
 }
 
-class _SystemPromptsSheet extends StatelessWidget {
+class _ThemeModeSheet extends StatelessWidget {
+  final WidgetRef ref;
+  const _ThemeModeSheet({required this.ref});
+
+  static const _modes = ['Dark', 'Light', 'System'];
+
+  @override
+  Widget build(BuildContext context) {
+    final storage = ref.read(storageServiceProvider);
+    final selected = storage.getSetting<String>(
+      HiveConstants.appTheme,
+      defaultValue: 'Dark',
+    );
+
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(color: AppTheme.surface),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Theme Mode',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+            ..._modes.map(
+              (mode) => ListTile(
+                leading: Icon(
+                  mode == 'Dark'
+                      ? Icons.dark_mode_outlined
+                      : mode == 'Light'
+                          ? Icons.light_mode_outlined
+                          : Icons.phone_android_rounded,
+                  size: 18,
+                ),
+                title: Text(mode),
+                trailing: selected == mode
+                    ? Icon(Icons.check_rounded, color: AppTheme.accent)
+                    : null,
+                onTap: () async {
+                  await storage.setSetting(HiveConstants.appTheme, mode);
+                  ref.read(appThemeModeProvider.notifier).state = mode;
+                  ref.read(settingsRefreshProvider.notifier).state++;
+                  if (context.mounted) Navigator.pop(context);
+                },
+              ),
+            ),
+            SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemPromptsSheet extends StatefulWidget {
   final ScrollController scrollController;
-  const _SystemPromptsSheet({required this.scrollController});
+  final WidgetRef ref;
+  const _SystemPromptsSheet({
+    required this.scrollController,
+    required this.ref,
+  });
 
   static const _presets = [
     (
@@ -1304,9 +1343,28 @@ class _SystemPromptsSheet extends StatelessWidget {
   ];
 
   @override
+  State<_SystemPromptsSheet> createState() => _SystemPromptsSheetState();
+}
+
+class _SystemPromptsSheetState extends State<_SystemPromptsSheet> {
+  late List<(String, String)> _prompts;
+  late String _activeTitle;
+
+  @override
+  void initState() {
+    super.initState();
+    final storage = widget.ref.read(storageServiceProvider);
+    _prompts = _loadPrompts(storage);
+    _activeTitle = storage.getSetting<String>(
+      HiveConstants.activeSystemPromptTitle,
+      defaultValue: 'None',
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1315,13 +1373,13 @@ class _SystemPromptsSheet extends StatelessWidget {
           Container(
             width: 36,
             height: 4,
-            margin: const EdgeInsets.only(top: 12, bottom: 16),
+            margin: EdgeInsets.only(top: 12, bottom: 16),
             decoration: BoxDecoration(
               color: AppTheme.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
@@ -1334,32 +1392,51 @@ class _SystemPromptsSheet extends StatelessWidget {
                   ),
                 ),
                 Spacer(),
-                Icon(Icons.add_rounded, color: AppTheme.accent),
+                IconButton(
+                  tooltip: 'Add prompt',
+                  onPressed: _addPrompt,
+                  icon: Icon(Icons.add_rounded, color: AppTheme.accent),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Expanded(
             child: ListView.separated(
-              controller: scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _presets.length,
+              controller: widget.scrollController,
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _prompts.length + 1,
               separatorBuilder: (_, __) =>
                   Container(height: 1, color: AppTheme.borderSubtle),
               itemBuilder: (_, i) {
+                if (i == 0) {
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('None'),
+                    subtitle: Text('Use only the default model behavior'),
+                    trailing: _activeTitle == 'None'
+                        ? Icon(Icons.check_rounded, color: AppTheme.accent)
+                        : null,
+                    onTap: () => _selectPrompt('None', ''),
+                  );
+                }
+                final prompt = _prompts[i - 1];
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(_presets[i].$1),
+                  title: Text(prompt.$1),
                   subtitle: Text(
-                    _presets[i].$2,
+                    prompt.$2,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 16,
-                    color: AppTheme.textTertiary,
-                  ),
+                  trailing: _activeTitle == prompt.$1
+                      ? Icon(Icons.check_rounded, color: AppTheme.accent)
+                      : Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color: AppTheme.textTertiary,
+                        ),
+                  onTap: () => _selectPrompt(prompt.$1, prompt.$2),
                 );
               },
             ),
@@ -1367,6 +1444,96 @@ class _SystemPromptsSheet extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<(String, String)> _loadPrompts(StorageService storage) {
+    final raw = storage.getSetting<List>(
+      HiveConstants.systemPrompts,
+      defaultValue: const [],
+    );
+    final custom = raw
+        .whereType<Map>()
+        .map((item) => (
+              item['title']?.toString() ?? '',
+              item['prompt']?.toString() ?? '',
+            ))
+        .where((item) => item.$1.trim().isNotEmpty && item.$2.trim().isNotEmpty)
+        .toList();
+    return [..._SystemPromptsSheet._presets, ...custom];
+  }
+
+  Future<void> _selectPrompt(String title, String prompt) async {
+    final storage = widget.ref.read(storageServiceProvider);
+    await storage.setSetting(HiveConstants.activeSystemPromptTitle, title);
+    await storage.setSetting(HiveConstants.activeSystemPromptText, prompt);
+    widget.ref.read(settingsRefreshProvider.notifier).state++;
+    setState(() => _activeTitle = title);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _addPrompt() async {
+    final titleCtrl = TextEditingController();
+    final promptCtrl = TextEditingController();
+    final result = await showDialog<(String, String)>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceElevated,
+        title: Text('Add System Prompt'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: InputDecoration(labelText: 'Name'),
+              autofocus: true,
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: promptCtrl,
+              decoration: InputDecoration(labelText: 'Prompt'),
+              minLines: 4,
+              maxLines: 7,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final title = titleCtrl.text.trim();
+              final prompt = promptCtrl.text.trim();
+              if (title.isEmpty || prompt.isEmpty) return;
+              Navigator.pop(ctx, (title, prompt));
+            },
+            child: Text('Save'),
+          ),
+        ],
+      ),
+    );
+    titleCtrl.dispose();
+    promptCtrl.dispose();
+    if (result == null) return;
+
+    final storage = widget.ref.read(storageServiceProvider);
+    final raw = storage.getSetting<List>(
+      HiveConstants.systemPrompts,
+      defaultValue: const [],
+    );
+    final updated = [
+      ...raw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)),
+      {'title': result.$1, 'prompt': result.$2},
+    ];
+    await storage.setSetting(HiveConstants.systemPrompts, updated);
+    await storage.setSetting(HiveConstants.activeSystemPromptTitle, result.$1);
+    await storage.setSetting(HiveConstants.activeSystemPromptText, result.$2);
+    widget.ref.read(settingsRefreshProvider.notifier).state++;
+    setState(() {
+      _prompts = _loadPrompts(storage);
+      _activeTitle = result.$1;
+    });
   }
 }
 
@@ -1376,7 +1543,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1384,13 +1551,13 @@ class _ChangeFolderSheet extends ConsumerWidget {
           Container(
             width: 36,
             height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
+            margin: EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
               color: AppTheme.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const Text(
+          Text(
             'Change Storage Folder',
             style: TextStyle(
               fontSize: 16,
@@ -1398,35 +1565,35 @@ class _ChangeFolderSheet extends ConsumerWidget {
               color: AppTheme.textPrimary,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          SizedBox(height: 8),
+          Text(
             'Models already downloaded will need to be re-downloaded if you change the folder.',
             style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () => _chooseFolder(context, ref),
-              icon: const Icon(Icons.folder_open_rounded, size: 16),
-              label: const Text('Choose Folder'),
+              icon: Icon(Icons.folder_open_rounded, size: 16),
+              label: Text('Choose Folder'),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () => _createFolder(context, ref),
-              icon: const Icon(Icons.create_new_folder_outlined, size: 16),
-              label: const Text('Create Folder'),
+              icon: Icon(Icons.create_new_folder_outlined, size: 16),
+              label: Text('Create Folder'),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text('Cancel'),
             ),
           ),
           SizedBox(height: MediaQuery.of(context).padding.bottom),
@@ -1458,7 +1625,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Storage folder updated')),
+          SnackBar(content: Text('Storage folder updated')),
         );
       }
     } catch (e) {
@@ -1476,10 +1643,10 @@ class _ChangeFolderSheet extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceElevated,
-        title: const Text('Create Folder'),
+        title: Text('Create Folder'),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Folder name',
             hintText: 'Lokus',
           ),
@@ -1488,11 +1655,11 @@ class _ChangeFolderSheet extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Create'),
+            child: Text('Create'),
           ),
         ],
       ),
@@ -1525,7 +1692,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Storage folder updated')),
+          SnackBar(content: Text('Storage folder updated')),
         );
       }
     } catch (e) {
@@ -1578,21 +1745,21 @@ class _ChangeFolderSheet extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceElevated,
-        title: const Text('Storage Access Needed'),
-        content: const Text(
+        title: Text('Storage Access Needed'),
+        content: Text(
           'Choosing any folder requires Android all-files access. You can use the app storage folder without this permission.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Use App Storage'),
+            child: Text('Use App Storage'),
           ),
           ElevatedButton(
             onPressed: () {
               openAppSettings();
               Navigator.pop(ctx, false);
             },
-            child: const Text('Open Settings'),
+            child: Text('Open Settings'),
           ),
         ],
       ),
@@ -1603,7 +1770,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Storage folder updated')),
+          SnackBar(content: Text('Storage folder updated')),
         );
       }
       return false;

@@ -50,7 +50,7 @@ class _ConversationDrawerState extends ConsumerState<ConversationDrawer> {
               child: conversations.isEmpty
                   ? _EmptyState()
                   : ListView(
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
                       ),
@@ -58,7 +58,7 @@ class _ConversationDrawerState extends ConsumerState<ConversationDrawer> {
                         if (pinned.isNotEmpty) ...[
                           _SectionLabel('PINNED'),
                           ...pinned.map((c) => _ConversationTile(convo: c)),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                         ],
                         if (recent.isNotEmpty) ...[
                           if (pinned.isNotEmpty) _SectionLabel('RECENT'),
@@ -79,7 +79,7 @@ class _DrawerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
           Container(
@@ -89,14 +89,14 @@ class _DrawerHeader extends StatelessWidget {
               color: AppTheme.accentSurface,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.auto_awesome_rounded,
               size: 15,
               color: AppTheme.accent,
             ),
           ),
-          const SizedBox(width: 10),
-          const Text(
+          SizedBox(width: 10),
+          Text(
             'Lokus',
             style: TextStyle(
               fontSize: 15,
@@ -104,10 +104,10 @@ class _DrawerHeader extends StatelessWidget {
               color: AppTheme.textPrimary,
             ),
           ),
-          const Spacer(),
+          Spacer(),
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
-            child: const Icon(
+            child: Icon(
               Icons.close_rounded,
               size: 18,
               color: AppTheme.textSecondary,
@@ -126,29 +126,33 @@ class _SearchBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: TextField(
         controller: controller,
-        onChanged: (v) =>
-            ref.read(_drawerSearchProvider.notifier).state = v,
-        style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+        onChanged: (v) => ref.read(_drawerSearchProvider.notifier).state = v,
+        cursorColor: AppTheme.accent,
+        style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
         decoration: InputDecoration(
           hintText: 'Search conversations...',
-          prefixIcon: const Icon(Icons.search_rounded, size: 16),
-          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 16,
+            color: AppTheme.textSecondary,
+          ),
+          contentPadding: EdgeInsets.symmetric(vertical: 10),
           filled: true,
           fillColor: AppTheme.surfaceElevated,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppTheme.border),
+            borderSide: BorderSide(color: AppTheme.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppTheme.border),
+            borderSide: BorderSide(color: AppTheme.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppTheme.accent),
+            borderSide: BorderSide(color: AppTheme.accent),
           ),
         ),
       ),
@@ -163,10 +167,10 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
+      padding: EdgeInsets.fromLTRB(8, 12, 8, 6),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: AppTheme.textTertiary,
@@ -190,8 +194,8 @@ class _ConversationTile extends ConsumerWidget {
       },
       onLongPress: () => _showOptions(context, ref),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        margin: EdgeInsets.only(bottom: 2),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(10),
@@ -199,7 +203,7 @@ class _ConversationTile extends ConsumerWidget {
         child: Row(
           children: [
             if (convo.isPinned)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(right: 8),
                 child: Icon(Icons.push_pin_rounded,
                     size: 12, color: AppTheme.accent),
@@ -210,7 +214,7 @@ class _ConversationTile extends ConsumerWidget {
                 children: [
                   Text(
                     convo.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textPrimary,
@@ -219,10 +223,10 @@ class _ConversationTile extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (convo.lastMessage != null) ...[
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       convo.lastMessage!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: AppTheme.textSecondary,
                       ),
@@ -233,10 +237,10 @@ class _ConversationTile extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Text(
               _formatDate(convo.updatedAt),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10,
                 color: AppTheme.textTertiary,
               ),
@@ -259,6 +263,8 @@ class _ConversationTile extends ConsumerWidget {
   void _showOptions(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: AppTheme.surface,
+      barrierColor: Colors.black.withOpacity(0.35),
       builder: (ctx) => _ConvoOptionsSheet(convo: convo),
     );
   }
@@ -270,61 +276,105 @@ class _ConvoOptionsSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: AppTheme.border,
-              borderRadius: BorderRadius.circular(2),
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppTheme.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          ListTile(
-            leading: Icon(
-              convo.isPinned
-                  ? Icons.push_pin_outlined
-                  : Icons.push_pin_rounded,
-              size: 18,
+            ListTile(
+              leading: Icon(
+                convo.isPinned
+                    ? Icons.push_pin_outlined
+                    : Icons.push_pin_rounded,
+                size: 18,
+                color: AppTheme.textSecondary,
+              ),
+              title: Text(
+                convo.isPinned ? 'Unpin' : 'Pin',
+                style: TextStyle(color: AppTheme.textPrimary),
+              ),
+              onTap: () {
+                ref.read(conversationsRepositoryProvider).togglePin(convo.id);
+                ref.read(conversationsRefreshProvider.notifier).state++;
+                Navigator.pop(context);
+              },
             ),
-            title: Text(convo.isPinned ? 'Unpin' : 'Pin'),
-            onTap: () {
-              ref
-                  .read(conversationsRepositoryProvider)
-                  .togglePin(convo.id);
-              ref.read(conversationsRefreshProvider.notifier).state++;
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.drive_file_rename_outline_rounded, size: 18),
-            title: const Text('Rename'),
-            onTap: () {
-              Navigator.pop(context);
-              _showRenameDialog(context, ref);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_outline_rounded, size: 18,
-                color: AppTheme.error),
-            title: const Text(
-              'Delete',
-              style: TextStyle(color: AppTheme.error),
+            ListTile(
+              leading: Icon(
+                Icons.edit_outlined,
+                size: 18,
+                color: AppTheme.textSecondary,
+              ),
+              title: Text(
+                'Rename',
+                style: TextStyle(color: AppTheme.textPrimary),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showRenameDialog(context, ref);
+              },
             ),
-            onTap: () {
-              ref
-                  .read(conversationsRepositoryProvider)
-                  .deleteConversation(convo.id);
-              ref.read(conversationsRefreshProvider.notifier).state++;
-              Navigator.pop(context);
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded,
+                  size: 18, color: AppTheme.error),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: AppTheme.error),
+              ),
+              onTap: () {
+                ref
+                    .read(conversationsRepositoryProvider)
+                    .deleteConversation(convo.id);
+                ref.read(conversationsRefreshProvider.notifier).state++;
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.download_rounded,
+                size: 18,
+                color: AppTheme.textSecondary,
+              ),
+              title: Text(
+                'Export',
+                style: TextStyle(color: AppTheme.textPrimary),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  final file = await ref
+                      .read(conversationsRepositoryProvider)
+                      .exportConversation(convo.id);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Chat exported to ${file.path}')),
+                  );
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Export failed: $e')),
+                  );
+                }
+              },
+            ),
+            SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -335,16 +385,20 @@ class _ConvoOptionsSheet extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceElevated,
-        title: const Text('Rename Chat'),
+        title: Text(
+          'Rename Chat',
+          style: TextStyle(color: AppTheme.textPrimary),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Title'),
+          cursorColor: AppTheme.accent,
+          style: TextStyle(color: AppTheme.textPrimary),
+          decoration: InputDecoration(labelText: 'Title'),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
@@ -355,7 +409,7 @@ class _ConvoOptionsSheet extends ConsumerWidget {
               }
               Navigator.pop(ctx);
             },
-            child: const Text('Save'),
+            child: Text('Save'),
           ),
         ],
       ),
@@ -366,7 +420,7 @@ class _ConvoOptionsSheet extends ConsumerWidget {
 class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -395,12 +449,12 @@ class _DrawerFooter extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       child: ListTile(
-        leading: const Icon(Icons.settings_outlined, size: 18),
-        title: const Text(
+        leading: Icon(Icons.settings_outlined, size: 18),
+        title: Text(
           'Settings',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),

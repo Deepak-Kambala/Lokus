@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -12,6 +13,7 @@ import 'features/chat/domain/entities/chat_message.dart';
 import 'features/chat/domain/entities/conversation.dart';
 import 'features/models/domain/entities/ai_model.dart';
 import 'router/app_router.dart';
+import 'services/storage_service.dart';
 import 'shared/theme/app_theme.dart';
 
 void main() {
@@ -66,11 +68,49 @@ Future<void> _bootstrap() async {
   await Hive.openBox<Conversation>(HiveConstants.conversationsBox);
   await Hive.openBox<ChatMessage>(HiveConstants.messagesBox);
 
+  await _prepareSessionState();
+
   runApp(
     const ProviderScope(
       child: LokusApp(),
     ),
   );
+}
+
+Future<void> _prepareSessionState() async {
+  final settings = Hive.box(HiveConstants.settingsBox);
+  final conversations = Hive.box<Conversation>(HiveConstants.conversationsBox);
+  final messages = Hive.box<ChatMessage>(HiveConstants.messagesBox);
+
+  await settings.delete(HiveConstants.selectedModelId);
+
+  final emptyConversationIds = conversations.values
+      .where((convo) =>
+          convo.messageCount == 0 &&
+          !messages.values.any((msg) => msg.conversationId == convo.id))
+      .map((convo) => convo.id)
+      .toList();
+
+  for (final id in emptyConversationIds) {
+    await conversations.delete(id);
+  }
+
+  final storagePath = settings.get(HiveConstants.storageFolderPath) as String?;
+  if (storagePath == null || storagePath.isEmpty) return;
+
+  final chatsDir = Directory('$storagePath/chats');
+  if (!await chatsDir.exists()) return;
+
+  for (final id in emptyConversationIds) {
+    await for (final file
+        in chatsDir.list(recursive: true, followLinks: false)) {
+      if (file is File && file.path.endsWith('$id.json')) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+    }
+  }
 }
 
 void _recordFatalError(Object error, StackTrace? stackTrace) {
@@ -88,14 +128,32 @@ class LokusApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    final themeModeName = ref.watch(appThemeModeProvider);
+    final themeMode = _themeModeFromName(themeModeName);
+    AppTheme.setBrightnessMode(
+      themeMode,
+      PlatformDispatcher.instance.platformBrightness,
+    );
 
     return MaterialApp.router(
       title: 'Lokus',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
+      themeMode: themeMode,
       routerConfig: router,
     );
+  }
+
+  ThemeMode _themeModeFromName(String value) {
+    switch (value) {
+      case 'Light':
+        return ThemeMode.light;
+      case 'System':
+        return ThemeMode.system;
+      case 'Dark':
+      default:
+        return ThemeMode.dark;
+    }
   }
 }

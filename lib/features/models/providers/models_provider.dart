@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/repositories/models_repository.dart';
 import '../domain/entities/ai_model.dart';
 import '../../../services/download_service.dart';
-import '../../../services/storage_service.dart';
 
 // ── Filters ──────────────────────────────────────────────────────────────────
 final selectedCategoryProvider = StateProvider<ModelCategory?>((ref) => null);
@@ -26,17 +25,7 @@ final downloadedModelsProvider = Provider<List<AiModel>>((ref) {
 });
 
 // ── Active model ──────────────────────────────────────────────────────────────
-final activeModelProvider = StateProvider<AiModel?>((ref) {
-  final storageService = ref.read(storageServiceProvider);
-  final selectedId = storageService.selectedModelId;
-  if (selectedId == null) return null;
-  final model = ref.read(modelsRepositoryProvider).getModelById(selectedId);
-  if (model?.status != ModelStatus.downloaded || model?.localPath == null) {
-    storageService.clearSelectedModel();
-    return null;
-  }
-  return model;
-});
+final activeModelProvider = StateProvider<AiModel?>((ref) => null);
 
 // ── Download manager ──────────────────────────────────────────────────────────
 class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {

@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_theme.dart';
+import '../../../../core/constants/hive_constants.dart';
+import '../../../../services/inference_service.dart';
+import '../../../../services/storage_service.dart';
 import '../../../conversations/providers/conversations_provider.dart';
 import '../../../models/providers/models_provider.dart';
 import '../../../models/domain/entities/ai_model.dart';
@@ -28,6 +31,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _inputController.addListener(() {
       final hasText = _inputController.text.trim().isNotEmpty;
       if (hasText != _hasText) setState(() => _hasText = hasText);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await ref
+          .read(conversationsRepositoryProvider)
+          .removeEmptyConversations();
+      await ref.read(storageServiceProvider).clearSelectedModel();
+      ref.read(activeModelProvider.notifier).state = null;
+      await ref.read(inferenceServiceProvider).unloadModel();
+      ref.read(conversationsRefreshProvider.notifier).state++;
     });
   }
 
@@ -58,13 +71,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       backgroundColor: AppTheme.background,
       toolbarHeight: 62,
       leading: IconButton(
-        icon: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary),
+        icon: Icon(Icons.menu_rounded, color: AppTheme.textPrimary),
         onPressed: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       title: const ModelSelectorButton(),
       actions: [
         NewChatButton(onPressed: _startNewChat),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
@@ -75,12 +88,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildBody() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _WelcomeHeader(),
-          const SizedBox(height: 28),
+          SizedBox(height: 28),
           _QuickStartGrid(onTap: _startWithPrompt),
         ],
       ),
@@ -91,7 +104,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.background,
-        border: const Border(top: BorderSide(color: AppTheme.border)),
+        border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       padding: EdgeInsets.only(
         left: 16,
@@ -110,15 +123,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               child: Row(
                 children: [
-                  const SizedBox(width: 16),
+                  SizedBox(width: 16),
                   Expanded(
                     child: TextField(
                       controller: _inputController,
-                      style: const TextStyle(
+                      cursorColor: AppTheme.accent,
+                      style: TextStyle(
                         fontSize: 14,
                         color: AppTheme.textPrimary,
                       ),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Message',
                         hintStyle: TextStyle(color: AppTheme.textTertiary),
                         border: InputBorder.none,
@@ -133,12 +147,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                 ],
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             width: 44,
@@ -154,7 +168,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               icon: Icon(
                 Icons.arrow_upward_rounded,
                 size: 18,
-                color: _hasText ? Colors.black : AppTheme.textTertiary,
+                color: _hasText ? AppTheme.onAccent : AppTheme.textTertiary,
               ),
               onPressed: _hasText ? _sendMessage : null,
             ),
@@ -164,13 +178,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _startNewChat() {
-    final model = ref.read(activeModelProvider);
-    if (model == null) {
-      _showNoModelDialog();
-      return;
-    }
-    _createAndOpenChat(model, '');
+  Future<void> _startNewChat() async {
+    await ref.read(conversationsRepositoryProvider).removeEmptyConversations();
+    await ref.read(storageServiceProvider).clearSelectedModel();
+    ref.read(activeModelProvider.notifier).state = null;
+    await ref.read(inferenceServiceProvider).unloadModel();
+    ref.read(conversationsRefreshProvider.notifier).state++;
+    _inputController.clear();
+    if (mounted) setState(() => _hasText = false);
   }
 
   void _startWithPrompt(String prompt) {
@@ -194,9 +209,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _createAndOpenChat(AiModel model, String initialMessage) async {
     final repo = ref.read(conversationsRepositoryProvider);
+    final systemPrompt = ref.read(storageServiceProvider).getSetting<String>(
+          HiveConstants.activeSystemPromptText,
+          defaultValue: '',
+        );
     final convo = await repo.createConversation(
       modelId: model.id,
       modelName: model.name,
+      systemPrompt: systemPrompt.trim().isEmpty ? null : systemPrompt.trim(),
     );
     ref.read(conversationsRefreshProvider.notifier).state++;
 
@@ -213,22 +233,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceElevated,
-        title: const Text('No Model Selected'),
-        content: const Text(
+        title: Text('No Model Selected'),
+        content: Text(
           'Please download and select an AI model to start chatting.',
           style: TextStyle(color: AppTheme.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               context.push('/models');
             },
-            child: const Text('Browse Models'),
+            child: Text('Browse Models'),
           ),
         ],
       ),
@@ -251,7 +271,7 @@ class _WelcomeHeader extends StatelessWidget {
                 fontWeight: FontWeight.w400,
               ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         Text(
           'How can I help today?',
           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
@@ -292,7 +312,7 @@ class _QuickStartGrid extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'QUICK START',
           style: TextStyle(
             fontSize: 10,
@@ -301,7 +321,7 @@ class _QuickStartGrid extends StatelessWidget {
             letterSpacing: 1.2,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2,
           crossAxisSpacing: 10,
@@ -313,8 +333,7 @@ class _QuickStartGrid extends StatelessWidget {
             return GestureDetector(
               onTap: () => onTap(p.$3),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppTheme.surface,
                   borderRadius: BorderRadius.circular(12),
@@ -323,11 +342,11 @@ class _QuickStartGrid extends StatelessWidget {
                 child: Row(
                   children: [
                     Icon(p.$2, size: 15, color: AppTheme.accent),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         p.$1,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: AppTheme.textPrimary,

@@ -278,9 +278,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _openNewChatForModel(
       AiModel model, String initialMessage) async {
     final repo = ref.read(conversationsRepositoryProvider);
+    await repo.removeEmptyConversations();
+    final systemPrompt = ref.read(storageServiceProvider).getSetting<String>(
+          HiveConstants.activeSystemPromptText,
+          defaultValue: '',
+        );
     final convo = await repo.createConversation(
       modelId: model.id,
       modelName: model.name,
+      systemPrompt: systemPrompt.trim().isEmpty ? null : systemPrompt.trim(),
     );
     ref.read(conversationsRefreshProvider.notifier).state++;
 
@@ -393,13 +399,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       backgroundColor: AppTheme.background,
       toolbarHeight: 62,
       leading: IconButton(
-        icon: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary),
+        icon: Icon(Icons.menu_rounded, color: AppTheme.textPrimary),
         onPressed: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       title: const ModelSelectorButton(),
       actions: [
         NewChatButton(onPressed: _newChat),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
@@ -410,7 +416,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _buildInputBar() {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.background,
         border: Border(top: BorderSide(color: AppTheme.border)),
       ),
@@ -433,9 +439,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: TextField(
                 controller: _inputCtrl,
                 enabled: !_isGenerating && !_isLoadingModel,
-                style:
-                    const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
-                decoration: const InputDecoration(
+                cursorColor: AppTheme.accent,
+                style: TextStyle(fontSize: 14, color: AppTheme.textPrimary),
+                decoration: InputDecoration(
                   hintText: 'Ask anything',
                   hintStyle: TextStyle(color: AppTheme.textTertiary),
                   border: InputBorder.none,
@@ -453,7 +459,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             width: 42,
@@ -478,14 +484,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ),
             child: _isLoadingModel
-                ? const Padding(
+                ? Padding(
                     padding: EdgeInsets.all(10),
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: AppTheme.accent),
                   )
                 : _isGenerating
                     ? IconButton(
-                        icon: const Icon(Icons.stop_rounded,
+                        icon: Icon(Icons.stop_rounded,
                             size: 16, color: AppTheme.accent),
                         onPressed: _stopGeneration,
                         padding: EdgeInsets.zero,
@@ -494,8 +500,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         icon: Icon(
                           Icons.arrow_upward_rounded,
                           size: 16,
-                          color:
-                              _hasText ? Colors.black : AppTheme.textTertiary,
+                          color: _hasText
+                              ? AppTheme.onAccent
+                              : AppTheme.textTertiary,
                         ),
                         onPressed: _hasText ? _sendMessage : null,
                         padding: EdgeInsets.zero,
@@ -507,17 +514,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _newChat() async {
-    final model = ref.read(activeModelProvider);
-    if (model == null) return;
-
-    final repo = ref.read(conversationsRepositoryProvider);
-    final convo = await repo.createConversation(
-      modelId: model.id,
-      modelName: model.name,
-    );
+    await ref.read(conversationsRepositoryProvider).removeEmptyConversations();
+    await ref.read(storageServiceProvider).clearSelectedModel();
+    ref.read(activeModelProvider.notifier).state = null;
+    await ref.read(inferenceServiceProvider).unloadModel();
     ref.read(conversationsRefreshProvider.notifier).state++;
 
-    if (mounted) context.pushReplacement('/chat/${convo.id}');
+    if (mounted) context.go('/home');
   }
 }
 
@@ -527,9 +530,9 @@ class _LoadingModelBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       color: AppTheme.accentSurface,
-      child: const Row(
+      child: Row(
         children: [
           SizedBox(
             width: 14,
@@ -559,23 +562,21 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       color: AppTheme.error.withOpacity(0.1),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 16, color: AppTheme.error),
-          const SizedBox(width: 10),
+          Icon(Icons.error_outline_rounded, size: 16, color: AppTheme.error),
+          SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(fontSize: 12, color: AppTheme.error),
+              style: TextStyle(fontSize: 12, color: AppTheme.error),
             ),
           ),
           GestureDetector(
             onTap: onDismiss,
-            child: const Icon(Icons.close_rounded,
-                size: 16, color: AppTheme.error),
+            child: Icon(Icons.close_rounded, size: 16, color: AppTheme.error),
           ),
         ],
       ),
@@ -600,7 +601,7 @@ class _MessageList extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.builder(
       controller: scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       itemCount: messages.length,
       itemBuilder: (context, index) => _MessageBubble(message: messages[index]),
     );
@@ -616,7 +617,7 @@ class _MessageBubble extends StatelessWidget {
     final isUser = message.role == MessageRole.user;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment:
             isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -630,17 +631,17 @@ class _MessageBubble extends StatelessWidget {
                 Container(
                   width: 24,
                   height: 24,
-                  margin: const EdgeInsets.only(right: 8, bottom: 4),
+                  margin: EdgeInsets.only(right: 8, bottom: 4),
                   decoration: BoxDecoration(
                     color: AppTheme.accentSurface,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Icon(Icons.auto_awesome_rounded,
+                  child: Icon(Icons.auto_awesome_rounded,
                       size: 12, color: AppTheme.accent),
                 ),
               Text(
                 isUser ? 'You' : 'Assistant',
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.textSecondary),
@@ -649,12 +650,12 @@ class _MessageBubble extends StatelessWidget {
                 Container(
                   width: 24,
                   height: 24,
-                  margin: const EdgeInsets.only(left: 8, bottom: 4),
+                  margin: EdgeInsets.only(left: 8, bottom: 4),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceHighlight,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Icon(Icons.person_outline_rounded,
+                  child: Icon(Icons.person_outline_rounded,
                       size: 12, color: AppTheme.textSecondary),
                 ),
             ],
@@ -667,12 +668,12 @@ class _MessageBubble extends StatelessWidget {
               left: isUser ? 40 : 0,
               right: isUser ? 0 : 40,
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: isUser ? AppTheme.userBubble : AppTheme.assistantBubble,
               borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
                 bottomLeft: Radius.circular(isUser ? 16 : 4),
                 bottomRight: Radius.circular(isUser ? 4 : 16),
               ),
@@ -689,7 +690,7 @@ class _MessageBubble extends StatelessWidget {
           // Actions row for assistant
           if (!isUser && !message.isStreaming && message.content.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: EdgeInsets.only(top: 6),
               child: _CopyMessageAction(message: message),
             ),
         ],
@@ -707,13 +708,12 @@ class _BubbleContent extends StatelessWidget {
     if (message.isError) {
       return Row(
         children: [
-          const Icon(Icons.warning_amber_rounded,
-              size: 14, color: AppTheme.error),
-          const SizedBox(width: 6),
+          Icon(Icons.warning_amber_rounded, size: 14, color: AppTheme.error),
+          SizedBox(width: 6),
           Expanded(
             child: Text(
               message.content,
-              style: const TextStyle(fontSize: 13, color: AppTheme.error),
+              style: TextStyle(fontSize: 13, color: AppTheme.error),
             ),
           ),
         ],
@@ -723,8 +723,8 @@ class _BubbleContent extends StatelessWidget {
     if (message.role == MessageRole.user) {
       return Text(
         message.content,
-        style: const TextStyle(
-            fontSize: 14, color: AppTheme.textPrimary, height: 1.5),
+        style:
+            TextStyle(fontSize: 14, color: AppTheme.textPrimary, height: 1.5),
       );
     }
 
@@ -738,12 +738,12 @@ class _BubbleContent extends StatelessWidget {
         ),
         if (message.isStreaming)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: EdgeInsets.only(top: 4),
             child: _CursorBlink(),
           ),
         if (!message.isStreaming && (message.tokenCount ?? 0) > 0)
           Padding(
-            padding: const EdgeInsets.only(top: 10),
+            padding: EdgeInsets.only(top: 10),
             child: _TokenStats(message: message),
           ),
       ],
@@ -751,12 +751,12 @@ class _BubbleContent extends StatelessWidget {
   }
 
   MarkdownStyleSheet _mdStyle() => MarkdownStyleSheet(
-        p: const TextStyle(
+        p: TextStyle(
             fontSize: 14,
             color: AppTheme.textPrimary,
             height: 1.55,
             fontFamily: 'Inter'),
-        code: const TextStyle(
+        code: TextStyle(
             fontSize: 12,
             color: AppTheme.accentLight,
             backgroundColor: AppTheme.accentSurface,
@@ -766,26 +766,26 @@ class _BubbleContent extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppTheme.border),
         ),
-        h1: const TextStyle(
+        h1: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: AppTheme.textPrimary,
             fontFamily: 'Inter'),
-        h2: const TextStyle(
+        h2: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
             fontFamily: 'Inter'),
-        h3: const TextStyle(
+        h3: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
             fontFamily: 'Inter'),
-        strong: const TextStyle(
+        strong: TextStyle(
             fontWeight: FontWeight.w700,
             color: AppTheme.textPrimary,
             fontFamily: 'Inter'),
-        listBullet: const TextStyle(color: AppTheme.accent),
+        listBullet: TextStyle(color: AppTheme.accent),
       );
 }
 
@@ -804,7 +804,7 @@ class _TokenStats extends StatelessWidget {
 
     return Text(
       parts.join(' · '),
-      style: const TextStyle(
+      style: TextStyle(
           fontSize: 10, color: AppTheme.textTertiary, fontFamily: 'monospace'),
     );
   }
@@ -823,7 +823,7 @@ class _CopyMessageAction extends StatelessWidget {
           tooltip: 'Copy',
           onTap: () {
             Clipboard.setData(ClipboardData(text: message.content));
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text('Copied'),
               duration: Duration(seconds: 1),
             ));
@@ -848,7 +848,7 @@ class _ActionBtn extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(5),
+          padding: EdgeInsets.all(5),
           decoration: BoxDecoration(
             color: AppTheme.surface,
             borderRadius: BorderRadius.circular(6),
@@ -896,7 +896,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
           final t = (_ctrl.value - delay).clamp(0.0, 1.0);
           final opacity = 0.3 + 0.7 * (1 - (t - 0.5).abs() * 2).clamp(0.0, 1.0);
           return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2),
+            margin: EdgeInsets.symmetric(horizontal: 2),
             width: 6,
             height: 6,
             decoration: BoxDecoration(
@@ -948,7 +948,7 @@ class _EmptyChat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -960,17 +960,17 @@ class _EmptyChat extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: AppTheme.accentDim),
               ),
-              child: const Icon(Icons.auto_awesome_rounded,
+              child: Icon(Icons.auto_awesome_rounded,
                   color: AppTheme.accent, size: 28),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Text(
               modelName.isNotEmpty ? modelName : 'AI Assistant',
               style: Theme.of(context).textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-            const Text(
+            SizedBox(height: 8),
+            Text(
               'Model loads on your first message.',
               style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
               textAlign: TextAlign.center,

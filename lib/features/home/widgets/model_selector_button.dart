@@ -20,7 +20,7 @@ class ModelSelectorButton extends ConsumerWidget {
         message: activeModel?.name ?? 'Select Model',
         child: Container(
           height: 38,
-          padding: const EdgeInsets.only(left: 8, right: 10),
+          padding: EdgeInsets.only(left: 8, right: 10),
           decoration: BoxDecoration(
             color: AppTheme.surface,
             borderRadius: BorderRadius.circular(8),
@@ -31,12 +31,12 @@ class ModelSelectorButton extends ConsumerWidget {
             children: [
               if (activeModel != null) ...[
                 ModelLogo(value: activeModel.providerIcon, size: 24),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxLabelWidth),
                   child: Text(
                     activeModel.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.textPrimary,
@@ -45,13 +45,13 @@ class ModelSelectorButton extends ConsumerWidget {
                   ),
                 ),
               ] else ...[
-                const Icon(
+                Icon(
                   Icons.memory_rounded,
                   size: 17,
                   color: AppTheme.textSecondary,
                 ),
-                const SizedBox(width: 8),
-                const Text(
+                SizedBox(width: 8),
+                Text(
                   'Select Model',
                   style: TextStyle(
                     fontSize: 13,
@@ -60,8 +60,8 @@ class ModelSelectorButton extends ConsumerWidget {
                   ),
                 ),
               ],
-              const SizedBox(width: 5),
-              const Icon(
+              SizedBox(width: 5),
+              Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 17,
                 color: AppTheme.textSecondary,

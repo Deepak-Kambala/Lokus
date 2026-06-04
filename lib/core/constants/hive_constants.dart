@@ -11,6 +11,9 @@ class HiveConstants {
   static const String selectedModelId = 'selected_model_id';
   static const String appTheme = 'app_theme';
   static const String appLanguage = 'app_language';
+  static const String systemPrompts = 'system_prompts';
+  static const String activeSystemPromptTitle = 'active_system_prompt_title';
+  static const String activeSystemPromptText = 'active_system_prompt_text';
 }
 
 class HiveTypeIds {

@@ -19,12 +19,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/setup',
         name: 'setup',
-        pageBuilder: (context, state) => _fadePage(key: state.pageKey, child: const StorageSetupScreen()),
+        pageBuilder: (context, state) =>
+            _fadePage(key: state.pageKey, child: const StorageSetupScreen()),
       ),
       GoRoute(
         path: '/home',
         name: 'home',
-        pageBuilder: (context, state) => _fadePage(key: state.pageKey, child: const HomeScreen()),
+        pageBuilder: (context, state) =>
+            _fadePage(key: state.pageKey, child: const HomeScreen()),
       ),
       GoRoute(
         path: '/chat/:conversationId',
@@ -32,7 +34,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final conversationId = state.pathParameters['conversationId']!;
           final modelId = state.uri.queryParameters['modelId'];
-          final initialMessage = state.extra is String ? state.extra as String : null;
+          final initialMessage =
+              state.extra is String ? state.extra as String : null;
           return _fadePage(
             key: state.pageKey,
             child: ChatScreen(
@@ -46,35 +49,41 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/models',
         name: 'models',
-        pageBuilder: (context, state) => _slidePage(key: state.pageKey, child: const ModelManagerScreen()),
+        pageBuilder: (context, state) =>
+            _slidePage(key: state.pageKey, child: const ModelManagerScreen()),
       ),
       GoRoute(
         path: '/settings',
         name: 'settings',
-        pageBuilder: (context, state) => _slidePage(key: state.pageKey, child: const SettingsScreen()),
+        pageBuilder: (context, state) =>
+            _slidePage(key: state.pageKey, child: const SettingsScreen()),
       ),
     ],
     errorPageBuilder: (context, state) => _fadePage(
       key: state.pageKey,
       child: Scaffold(
-        backgroundColor: const Color(0xFF0E0E10),
-        body: Center(child: Text('Not found', style: TextStyle(color: Colors.white70))),
+        backgroundColor: Color(0xFF0E0E10),
+        body: Center(
+            child: Text('Not found', style: TextStyle(color: Colors.white70))),
       ),
     ),
   );
 });
 
-CustomTransitionPage<void> _fadePage({required LocalKey key, required Widget child}) {
+CustomTransitionPage<void> _fadePage(
+    {required LocalKey key, required Widget child}) {
   return CustomTransitionPage<void>(
     key: key,
     child: child,
     transitionDuration: const Duration(milliseconds: 220),
-    transitionsBuilder: (_, animation, __, child) =>
-        FadeTransition(opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut), child: child),
+    transitionsBuilder: (_, animation, __, child) => FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+        child: child),
   );
 }
 
-CustomTransitionPage<void> _slidePage({required LocalKey key, required Widget child}) {
+CustomTransitionPage<void> _slidePage(
+    {required LocalKey key, required Widget child}) {
   return CustomTransitionPage<void>(
     key: key,
     child: child,

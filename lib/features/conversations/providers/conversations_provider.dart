@@ -99,6 +99,22 @@ class ConversationsRepository {
     }
   }
 
+  Future<void> removeEmptyConversations() async {
+    final emptyIds = _convoBox.values
+        .whereType<Conversation>()
+        .where((convo) =>
+            convo.messageCount == 0 &&
+            !_msgBox.values
+                .whereType<ChatMessage>()
+                .any((m) => m.conversationId == convo.id))
+        .map((convo) => convo.id)
+        .toList();
+
+    for (final id in emptyIds) {
+      await deleteConversation(id);
+    }
+  }
+
   List<ChatMessage> getMessages(String conversationId) {
     return _msgBox.values
         .whereType<ChatMessage>()
@@ -186,6 +202,47 @@ class ConversationsRepository {
       }).toList(),
     });
 
+    await file.writeAsString(payload, flush: true);
+    return file;
+  }
+
+  Future<File> exportConversation(String conversationId) async {
+    final root = _storageService.storageFolderPath;
+    if (root == null || root.isEmpty) {
+      throw FileSystemException('Storage folder is not configured.');
+    }
+    final convo = _convoBox.get(conversationId);
+    if (convo == null) {
+      throw FileSystemException('Conversation not found.');
+    }
+
+    final exportDir = Directory(p.join(root, 'exports'));
+    await exportDir.create(recursive: true);
+
+    final timestamp = DateTime.now()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+    final title = _safePathPart(convo.title).isEmpty
+        ? 'chat'
+        : _safePathPart(convo.title);
+    final file = File(p.join(exportDir.path, '${title}_$timestamp.json'));
+    final messages = getMessages(convo.id);
+    final payload = const JsonEncoder.withIndent('  ').convert({
+      'app': 'Lokus',
+      'exportedAt': DateTime.now().toIso8601String(),
+      'conversation': {
+        'id': convo.id,
+        'title': convo.title,
+        'modelId': convo.modelId,
+        'modelName': convo.modelName,
+        'createdAt': convo.createdAt.toIso8601String(),
+        'updatedAt': convo.updatedAt.toIso8601String(),
+        'isPinned': convo.isPinned,
+        'systemPrompt': convo.systemPrompt,
+        'messages': messages.map(_messageToJson).toList(),
+      },
+    });
     await file.writeAsString(payload, flush: true);
     return file;
   }

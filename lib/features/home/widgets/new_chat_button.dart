@@ -25,7 +25,7 @@ class NewChatButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppTheme.border),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.add_comment_outlined,
             size: 18,
             color: AppTheme.textPrimary,
