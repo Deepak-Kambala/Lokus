@@ -1,0 +1,259 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
+import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
+
+import '../../../core/constants/hive_constants.dart';
+import '../../../services/storage_service.dart';
+import '../../chat/domain/entities/chat_message.dart';
+import '../../chat/domain/entities/conversation.dart';
+
+// ── Repository ──────────────────────────────────────────────────────────────
+
+final conversationsRepositoryProvider = Provider<ConversationsRepository>((ref) {
+  return ConversationsRepository(ref.read(storageServiceProvider));
+});
+
+class ConversationsRepository {
+  final StorageService _storageService;
+
+  ConversationsRepository(this._storageService);
+
+  Box<Conversation> get _convoBox =>
+      Hive.box<Conversation>(HiveConstants.conversationsBox);
+  Box<ChatMessage> get _msgBox =>
+      Hive.box<ChatMessage>(HiveConstants.messagesBox);
+
+  List<Conversation> getAllConversations() {
+    final convos = _convoBox.values.whereType<Conversation>().toList();
+    convos.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+    return convos;
+  }
+
+  Conversation? getById(String id) => _convoBox.get(id);
+
+  Future<Conversation> createConversation({
+    required String modelId,
+    required String modelName,
+    String? systemPrompt,
+  }) async {
+    final id = const Uuid().v4();
+    final now = DateTime.now();
+    final convo = Conversation(
+      id: id,
+      title: 'New Chat',
+      modelId: modelId,
+      modelName: modelName,
+      createdAt: now,
+      updatedAt: now,
+      systemPrompt: systemPrompt,
+    );
+    await _convoBox.put(id, convo);
+    await _persistConversation(convo);
+    return convo;
+  }
+
+  Future<void> saveConversation(Conversation convo) async {
+    await _convoBox.put(convo.id, convo);
+    await _persistConversation(convo);
+  }
+
+  Future<void> renameConversation(String id, String newTitle) async {
+    final convo = _convoBox.get(id);
+    if (convo != null) {
+      final updated = convo.copyWith(title: newTitle);
+      await _convoBox.put(id, updated);
+      await _persistConversation(updated);
+    }
+  }
+
+  Future<void> togglePin(String id) async {
+    final convo = _convoBox.get(id);
+    if (convo != null) {
+      final updated = convo.copyWith(isPinned: !convo.isPinned);
+      await _convoBox.put(id, updated);
+      await _persistConversation(updated);
+    }
+  }
+
+  Future<void> deleteConversation(String id) async {
+    final convo = _convoBox.get(id);
+    await _convoBox.delete(id);
+    // Delete associated messages
+    final toDelete = _msgBox.values
+        .whereType<ChatMessage>()
+        .where((m) => m.conversationId == id)
+        .map((m) => m.key)
+        .toList();
+    await _msgBox.deleteAll(toDelete);
+    if (convo != null) {
+      await _deleteConversationFile(convo);
+    }
+  }
+
+  List<ChatMessage> getMessages(String conversationId) {
+    return _msgBox.values
+        .whereType<ChatMessage>()
+        .where((m) => m.conversationId == conversationId)
+        .toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  }
+
+  Future<void> addMessage(ChatMessage message) async {
+    await _msgBox.put(message.id, message);
+
+    // Update conversation metadata
+    final convo = _convoBox.get(message.conversationId);
+    if (convo != null) {
+      final updated = convo.copyWith(
+        updatedAt: DateTime.now(),
+        messageCount: convo.messageCount + 1,
+        lastMessage: message.content.length > 60
+            ? '${message.content.substring(0, 60)}...'
+            : message.content,
+        // Auto-title from first user message
+        title: convo.messageCount == 0 && message.role == MessageRole.user
+            ? (message.content.length > 40
+                ? message.content.substring(0, 40)
+                : message.content)
+            : null,
+      );
+      await _convoBox.put(convo.id, updated);
+      await _persistConversation(updated);
+    }
+  }
+
+  Future<void> updateMessage(ChatMessage message) async {
+    await _msgBox.put(message.id, message);
+    final convo = _convoBox.get(message.conversationId);
+    if (convo != null) {
+      await _persistConversation(convo);
+    }
+  }
+
+  Future<void> deleteMessage(String messageId) async {
+    final message = _msgBox.get(messageId);
+    await _msgBox.delete(messageId);
+    if (message != null) {
+      final convo = _convoBox.get(message.conversationId);
+      if (convo != null) {
+        await _persistConversation(convo);
+      }
+    }
+  }
+
+  Future<void> _persistConversation(Conversation convo) async {
+    final root = _storageService.storageFolderPath;
+    if (root == null || root.isEmpty) return;
+
+    final dir = Directory(p.join(root, 'chats', _safePathPart(convo.modelId)));
+    await dir.create(recursive: true);
+
+    final messages = getMessages(convo.id);
+    final file = File(p.join(dir.path, '${_safePathPart(convo.id)}.json'));
+    final payload = const JsonEncoder.withIndent('  ').convert({
+      'id': convo.id,
+      'title': convo.title,
+      'modelId': convo.modelId,
+      'modelName': convo.modelName,
+      'createdAt': convo.createdAt.toIso8601String(),
+      'updatedAt': convo.updatedAt.toIso8601String(),
+      'isPinned': convo.isPinned,
+      'messageCount': messages.length,
+      'lastMessage': convo.lastMessage,
+      'systemPrompt': convo.systemPrompt,
+      'messages': messages.map(_messageToJson).toList(),
+    });
+    await file.writeAsString(payload, flush: true);
+  }
+
+  Future<void> _deleteConversationFile(Conversation convo) async {
+    final root = _storageService.storageFolderPath;
+    if (root == null || root.isEmpty) return;
+
+    final file = File(p.join(
+      root,
+      'chats',
+      _safePathPart(convo.modelId),
+      '${_safePathPart(convo.id)}.json',
+    ));
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
+  Map<String, dynamic> _messageToJson(ChatMessage message) {
+    return {
+      'id': message.id,
+      'conversationId': message.conversationId,
+      'role': message.role.name,
+      'content': message.content,
+      'timestamp': message.timestamp.toIso8601String(),
+      'tokenCount': message.tokenCount,
+      'generationSeconds': message.generationSeconds,
+      'tokensPerSecond': message.tokensPerSecond,
+      'isStreaming': message.isStreaming,
+      'isError': message.isError,
+    };
+  }
+
+  String _safePathPart(String value) {
+    return value.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+  }
+}
+
+// ── Providers ───────────────────────────────────────────────────────────────
+
+final conversationsRefreshProvider = StateProvider<int>((ref) => 0);
+
+final conversationsListProvider = Provider<List<Conversation>>((ref) {
+  ref.watch(conversationsRefreshProvider);
+  return ref.read(conversationsRepositoryProvider).getAllConversations();
+});
+
+final currentConversationProvider =
+    StateProvider<Conversation?>((ref) => null);
+
+final messagesProvider = StateNotifierProvider.family<MessagesNotifier,
+    List<ChatMessage>, String>((ref, conversationId) {
+  return MessagesNotifier(
+    ref.read(conversationsRepositoryProvider),
+    conversationId,
+  );
+});
+
+class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
+  final ConversationsRepository _repo;
+  final String _conversationId;
+
+  MessagesNotifier(this._repo, this._conversationId)
+      : super(_repo.getMessages(_conversationId));
+
+  Future<void> addMessage(ChatMessage message) async {
+    await _repo.addMessage(message);
+    state = [...state, message];
+  }
+
+  Future<void> updateLastMessage(ChatMessage message) async {
+    await _repo.updateMessage(message);
+    if (state.isNotEmpty) {
+      state = [...state.sublist(0, state.length - 1), message];
+    }
+  }
+
+  Future<void> deleteMessage(String messageId) async {
+    await _repo.deleteMessage(messageId);
+    state = state.where((m) => m.id != messageId).toList();
+  }
+
+  void refresh() {
+    state = _repo.getMessages(_conversationId);
+  }
+}

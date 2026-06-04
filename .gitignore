@@ -1,0 +1,86 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.AppleDouble
+.LSOverride
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+.metadata
+coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/app/intermediates/
+android/app/outputs/
+
+# Local properties
+android/local.properties
+local.properties
+key.properties
+*.jks
+*.keystore
+
+# Generated native/plugin build artifacts
+third_party/**/build/
+third_party/**/.dart_tool/
+third_party/**/.gradle/
+third_party/**/.cxx/
+third_party/**/example/build/
+third_party/**/example/.dart_tool/
+third_party/**/example/android/.gradle/
+third_party/**/example/android/local.properties
+
+# Hive boxes (generated at runtime)
+*.hive
+*.hive.lock
+
+# Runtime downloads and local app data
+/models/
+/chats/
+*.gguf
+*.gguf.tmp
+*.tmp
+
+# Lottie animations (optional)
+# assets/animations/*.json

@@ -1,0 +1,23 @@
+class HiveConstants {
+  static const String settingsBox = 'settings';
+  static const String modelsBox = 'models';
+  static const String conversationsBox = 'conversations';
+  static const String messagesBox = 'messages';
+
+  // Settings keys
+  static const String onboardingComplete = 'onboarding_complete';
+  static const String storageFolderUri = 'storage_folder_uri';
+  static const String storageFolderPath = 'storage_folder_path';
+  static const String selectedModelId = 'selected_model_id';
+  static const String appTheme = 'app_theme';
+  static const String appLanguage = 'app_language';
+}
+
+class HiveTypeIds {
+  static const int aiModel = 0;
+  static const int modelStatus = 1;
+  static const int modelCategory = 2;
+  static const int conversation = 3;
+  static const int chatMessage = 4;
+  static const int messageRole = 5;
+}
