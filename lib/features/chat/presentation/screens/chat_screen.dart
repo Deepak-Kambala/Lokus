@@ -434,7 +434,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               decoration: BoxDecoration(
                 color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.border),
               ),
               child: TextField(
                 controller: _inputCtrl,
@@ -444,6 +443,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 decoration: InputDecoration(
                   hintText: 'Ask anything',
                   hintStyle: TextStyle(color: AppTheme.textTertiary),
+                  filled: false,
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,

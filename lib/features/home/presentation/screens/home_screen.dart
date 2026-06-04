@@ -119,7 +119,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               decoration: BoxDecoration(
                 color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppTheme.border),
               ),
               child: Row(
                 children: [
@@ -135,6 +134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       decoration: InputDecoration(
                         hintText: 'Message',
                         hintStyle: TextStyle(color: AppTheme.textTertiary),
+                        filled: false,
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
