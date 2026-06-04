@@ -10,6 +10,7 @@
 #include <vector>
 #include <mutex>
 #include <chrono>
+#include <algorithm>
 #include <android/log.h>
 
 #define LOG_TAG "FlutterLlamaBridge"
@@ -39,6 +40,61 @@ static void reset_context_memory() {
     if (g_context) {
         llama_memory_clear(llama_get_memory(g_context), true);
     }
+}
+
+static std::string sanitize_utf8(const std::string& input) {
+    std::string output;
+    output.reserve(input.size());
+
+    for (size_t i = 0; i < input.size();) {
+        unsigned char c = static_cast<unsigned char>(input[i]);
+        size_t len = 0;
+
+        if (c <= 0x7F) {
+            output.push_back(static_cast<char>(c));
+            i++;
+            continue;
+        } else if ((c & 0xE0) == 0xC0) {
+            len = 2;
+        } else if ((c & 0xF0) == 0xE0) {
+            len = 3;
+        } else if ((c & 0xF8) == 0xF0) {
+            len = 4;
+        } else {
+            output.push_back('?');
+            i++;
+            continue;
+        }
+
+        if (i + len > input.size()) {
+            output.push_back('?');
+            break;
+        }
+
+        bool valid = true;
+        for (size_t j = 1; j < len; j++) {
+            unsigned char cc = static_cast<unsigned char>(input[i + j]);
+            if ((cc & 0xC0) != 0x80) {
+                valid = false;
+                break;
+            }
+        }
+
+        if (valid) {
+            output.append(input, i, len);
+            i += len;
+        } else {
+            output.push_back('?');
+            i++;
+        }
+    }
+
+    return output;
+}
+
+static jstring safe_new_string_utf(JNIEnv* env, const std::string& value) {
+    std::string sanitized = sanitize_utf8(value);
+    return env->NewStringUTF(sanitized.c_str());
 }
 
 extern "C" {
@@ -150,7 +206,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
     }
     
     const char* prompt_str = env->GetStringUTFChars(prompt, nullptr);
-    LOGI("Generating with prompt: %.50s...", prompt_str);
+    LOGI("Generating text");
     
     std::string prompt_text(prompt_str);
     env->ReleaseStringUTFChars(prompt, prompt_str);
@@ -159,6 +215,15 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
     
     // Tokenize prompt
     const int n_prompt = -llama_tokenize(g_vocab, prompt_text.c_str(), prompt_text.size(), NULL, 0, true, true);
+    if (n_prompt <= 0) {
+        LOGE("Prompt tokenization returned no tokens");
+        return nullptr;
+    }
+    const int n_ctx = llama_n_ctx(g_context);
+    if (n_prompt >= n_ctx - 8) {
+        LOGE("Prompt too long: tokens=%d context=%d", n_prompt, n_ctx);
+        return nullptr;
+    }
     std::vector<llama_token> prompt_tokens(n_prompt);
     
     if (llama_tokenize(g_vocab, prompt_text.c_str(), prompt_text.size(), prompt_tokens.data(), prompt_tokens.size(), true, true) < 0) {
@@ -209,6 +274,11 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
             break;
         }
         
+        if (n_pos >= n_ctx - 1) {
+            LOGI("Context limit reached");
+            break;
+        }
+
         // Convert token to text
         char token_str[256] = {0};
         int n = llama_token_to_piece(g_vocab, new_token, token_str, sizeof(token_str) - 1, 0, true);
@@ -244,7 +314,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
         return nullptr;
     }
     
-    jstring j_result = env->NewStringUTF(result.c_str());
+    jstring j_result = safe_new_string_utf(env, result);
     jobject generation_result = env->NewObject(result_class, constructor, j_result, n_generated);
     
     return generation_result;
@@ -283,6 +353,15 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
     
     // Tokenize prompt
     const int n_prompt = -llama_tokenize(g_vocab, prompt_text.c_str(), prompt_text.size(), NULL, 0, true, true);
+    if (n_prompt <= 0) {
+        LOGE("Prompt tokenization returned no tokens");
+        return;
+    }
+    const int n_ctx = llama_n_ctx(g_context);
+    if (n_prompt >= n_ctx - 8) {
+        LOGE("Prompt too long: tokens=%d context=%d", n_prompt, n_ctx);
+        return;
+    }
     std::vector<llama_token> prompt_tokens(n_prompt);
     
     if (llama_tokenize(g_vocab, prompt_text.c_str(), prompt_text.size(), prompt_tokens.data(), prompt_tokens.size(), true, true) < 0) {
@@ -323,6 +402,11 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
         if (llama_vocab_is_eog(g_vocab, new_token)) {
             break;
         }
+
+        if (n_pos >= n_ctx - 1) {
+            LOGI("Context limit reached");
+            break;
+        }
         
         // Convert token to text and store
         char token_str[256] = {0};
@@ -356,7 +440,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamNext(
     }
     
     const std::string& token = g_stream_tokens[g_stream_pos++];
-    return env->NewStringUTF(token.c_str());
+    return safe_new_string_utf(env, token);
 }
 
 // End streaming generation

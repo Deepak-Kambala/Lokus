@@ -40,7 +40,8 @@ class InferenceService {
           modelPath: model.localPath!,
           nThreads: 2,
           nGpuLayers: 0,
-          contextSize: 1024,
+          contextSize: 768,
+          batchSize: 64,
         ),
       );
       if (!ok) {
@@ -63,7 +64,7 @@ class InferenceService {
     required List<ChatMessage> history,
     required String userMessage,
     double temperature = 0.7,
-    int maxTokens = 256,
+    int maxTokens = 160,
     String? systemPrompt,
   }) async* {
     if (_loadedModel == null) {

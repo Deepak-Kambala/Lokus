@@ -83,7 +83,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _showSnack('Model not downloaded yet. Download it from Browse Models.');
       return false;
     }
-    if (model.sizeGb > 3.2) {
+    if (model.sizeGb > 1.6) {
       setState(() {
         _modelLoadError =
             '${model.name} is too large for stable on-device chat here. Use a lighter model such as Qwen3-0.6B, gemma-3-1b-it, or Llama-3.2-1B-Instruct.';
