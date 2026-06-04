@@ -97,6 +97,27 @@ static jstring safe_new_string_utf(JNIEnv* env, const std::string& value) {
     return env->NewStringUTF(sanitized.c_str());
 }
 
+static bool decode_prompt_tokens(const std::vector<llama_token>& tokens) {
+    if (!g_context || tokens.empty()) {
+        return false;
+    }
+
+    const int chunk_size = 64;
+    for (size_t offset = 0; offset < tokens.size(); offset += chunk_size) {
+        const int n_tokens = static_cast<int>(std::min<size_t>(chunk_size, tokens.size() - offset));
+        llama_batch batch = llama_batch_get_one(
+            const_cast<llama_token*>(tokens.data() + offset),
+            n_tokens
+        );
+        if (llama_decode(g_context, batch) != 0) {
+            LOGE("Failed to decode prompt chunk at offset=%zu size=%d", offset, n_tokens);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 extern "C" {
 
 // Initialize and load model
@@ -231,11 +252,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
         return nullptr;
     }
     
-    // Create batch
-    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());
-    
-    // Decode prompt
-    if (llama_decode(g_context, batch) != 0) {
+    if (!decode_prompt_tokens(prompt_tokens)) {
         LOGE("Failed to decode prompt");
         return nullptr;
     }
@@ -288,7 +305,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
         }
         
         // Prepare for next iteration
-        batch = llama_batch_get_one(&new_token, 1);
+        llama_batch batch = llama_batch_get_one(&new_token, 1);
         n_pos++;
         
         if (llama_decode(g_context, batch) != 0) {
@@ -369,11 +386,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
         return;
     }
     
-    // Create batch
-    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());
-    
-    // Decode prompt
-    if (llama_decode(g_context, batch) != 0) {
+    if (!decode_prompt_tokens(prompt_tokens)) {
         LOGE("Failed to decode prompt");
         return;
     }
@@ -416,7 +429,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
             g_stream_tokens.push_back(std::string(token_str));
         }
         
-        batch = llama_batch_get_one(&new_token, 1);
+        llama_batch batch = llama_batch_get_one(&new_token, 1);
         n_pos++;
         
         if (llama_decode(g_context, batch) != 0) {

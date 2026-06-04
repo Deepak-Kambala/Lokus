@@ -10,6 +10,8 @@ import '../../../../shared/theme/app_theme.dart';
 import '../../../../services/inference_service.dart';
 import '../../../conversations/providers/conversations_provider.dart';
 import '../../../chat/domain/entities/chat_message.dart';
+import '../../../models/data/repositories/models_repository.dart';
+import '../../../models/domain/entities/ai_model.dart';
 import '../../../models/providers/models_provider.dart';
 import '../../domain/entities/conversation.dart';
 import '../../../home/widgets/conversation_drawer.dart';
@@ -71,16 +73,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Model loading ──────────────────────────────────────────────────────────
 
-  Future<bool> _ensureModelLoaded() async {
+  Future<bool> _ensureModelLoaded(AiModel model) async {
     final inference = ref.read(inferenceServiceProvider);
-    final model = ref.read(activeModelProvider);
 
-    if (model == null) {
-      _showSnack('No model selected. Pick one from the model manager.');
-      return false;
-    }
     if (model.localPath == null) {
-      _showSnack('Model not downloaded yet. Download it from Browse Models.');
+      _showSnack('${model.name} is not downloaded. Download it again.');
       return false;
     }
     if (model.sizeGb > 1.6) {
@@ -120,7 +117,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _isGenerating) return;
 
-    final ready = await _ensureModelLoaded();
+    final convo = ref
+        .read(conversationsRepositoryProvider)
+        .getById(widget.conversationId);
+    if (convo == null) {
+      _showSnack('Chat not found. Start a new chat.');
+      return;
+    }
+
+    final activeModel = ref.read(activeModelProvider);
+    if (activeModel != null && activeModel.id != convo.modelId) {
+      await _openNewChatForModel(activeModel, text);
+      return;
+    }
+
+    final model =
+        ref.read(modelsRepositoryProvider).getModelById(convo.modelId);
+    if (model == null ||
+        model.status != ModelStatus.downloaded ||
+        model.localPath == null) {
+      _showSnack('${convo.modelName} is missing. Download it again.');
+      ref.read(modelsRefreshProvider.notifier).state++;
+      return;
+    }
+
+    final ready = await _ensureModelLoaded(model);
     if (!ready) return;
 
     _inputCtrl.clear();
@@ -156,21 +177,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .read(messagesProvider(widget.conversationId).notifier)
         .addMessage(assistantMsg);
 
-    // Fetch conversation system prompt if any
-    final convo = ref
-        .read(conversationsRepositoryProvider)
-        .getById(widget.conversationId);
-
     final history = ref.read(messagesProvider(widget.conversationId));
 
     final inference = ref.read(inferenceServiceProvider);
     final stream = inference.generateStream(
-      history: history
-          .where((m) =>
-              m.id != userMsg.id && !m.isStreaming && m.content.isNotEmpty)
-          .toList(),
+      history: _compactHistoryForPrompt(history, userMsg.id),
       userMessage: text,
-      systemPrompt: convo?.systemPrompt,
+      systemPrompt: convo.systemPrompt,
     );
 
     String accumulated = '';
@@ -255,6 +268,51 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _showSnack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _openNewChatForModel(
+      AiModel model, String initialMessage) async {
+    final repo = ref.read(conversationsRepositoryProvider);
+    final convo = await repo.createConversation(
+      modelId: model.id,
+      modelName: model.name,
+    );
+    ref.read(conversationsRefreshProvider.notifier).state++;
+
+    if (!mounted) return;
+    _inputCtrl.clear();
+    setState(() => _hasText = false);
+    context.pushReplacement(
+      '/chat/${convo.id}',
+      extra: initialMessage.isNotEmpty ? initialMessage : null,
+    );
+  }
+
+  List<ChatMessage> _compactHistoryForPrompt(
+    List<ChatMessage> history,
+    String currentUserMessageId,
+  ) {
+    const maxMessages = 4;
+    const maxCharsPerMessage = 700;
+
+    return history
+        .where((m) =>
+            m.id != currentUserMessageId &&
+            !m.isStreaming &&
+            !m.isError &&
+            m.content.trim().isNotEmpty)
+        .toList()
+        .reversed
+        .take(maxMessages)
+        .toList()
+        .reversed
+        .map((m) {
+      final content = m.content.trim();
+      if (content.length <= maxCharsPerMessage) return m;
+      return m.copyWith(
+        content: content.substring(content.length - maxCharsPerMessage),
+      );
+    }).toList();
   }
 
   String _friendlyGenerationError(Object error) {
