@@ -9,17 +9,26 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/hive_constants.dart';
 import '../../../../services/storage_service.dart';
+import '../../../conversations/providers/conversations_provider.dart';
 import '../../../models/data/repositories/models_repository.dart';
 import '../../../models/providers/models_provider.dart';
+
+final settingsRefreshProvider = StateProvider<int>((ref) => 0);
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(settingsRefreshProvider);
     final storageService = ref.read(storageServiceProvider);
     final folderPath = storageService.storageFolderPath ?? 'Not set';
+    final language = storageService.getSetting<String>(
+      HiveConstants.appLanguage,
+      defaultValue: 'Auto',
+    );
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -66,15 +75,15 @@ class SettingsScreen extends ConsumerWidget {
           _SectionHeader('APP'),
           _SettingsTile(
             icon: Icons.language_rounded,
-            title: 'Language',
-            subtitle: 'English',
-            onTap: () {},
+            title: 'Response Language',
+            subtitle: language,
+            onTap: () => _showLanguageSheet(context, ref),
           ),
           _SettingsTile(
             icon: Icons.upload_rounded,
             title: 'Export Chats',
             subtitle: 'Export conversations as JSON',
-            onTap: () {},
+            onTap: () => _exportChats(context, ref),
           ),
           _SectionHeader('INFO'),
           _SettingsTile(
@@ -135,6 +144,30 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => const _ChangeFolderSheet(),
     );
+  }
+
+  void _showLanguageSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => _LanguageSheet(ref: ref),
+    );
+  }
+
+  Future<void> _exportChats(BuildContext context, WidgetRef ref) async {
+    try {
+      final file = await ref
+          .read(conversationsRepositoryProvider)
+          .exportAllConversations();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Chats exported to ${file.path}')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    }
   }
 
   void _showAboutDialog(BuildContext context) {
@@ -222,6 +255,102 @@ class _SettingsTile extends StatelessWidget {
           ? const Icon(Icons.chevron_right_rounded,
               size: 18, color: AppTheme.textTertiary)
           : null,
+    );
+  }
+}
+
+class _LanguageSheet extends StatelessWidget {
+  final WidgetRef ref;
+  const _LanguageSheet({required this.ref});
+
+  static const _languages = [
+    'Auto',
+    'English (United States)',
+    'English (United Kingdom)',
+    'Hindi (India)',
+    'Spanish (Spain)',
+    'French (France)',
+    'German (Germany)',
+    'Italian (Italy)',
+    'Portuguese (Brazil)',
+    'Dutch (Netherlands)',
+    'Polish (Poland)',
+    'Turkish (Turkey)',
+    'Japanese (Japan)',
+    'Korean (South Korea)',
+    'Chinese (China)',
+    'Arabic (United Arab Emirates)',
+    'Indonesian (Indonesia)',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final storage = ref.read(storageServiceProvider);
+    final selected = storage.getSetting<String>(
+      HiveConstants.appLanguage,
+      defaultValue: 'Auto',
+    );
+
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(color: AppTheme.surface),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Response Language',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _languages.length,
+                itemBuilder: (context, index) {
+                  final language = _languages[index];
+                  final isSelected = language == selected;
+                  return ListTile(
+                    title: Text(language),
+                    subtitle: language == 'Auto'
+                        ? const Text('Use the same language as the prompt')
+                        : null,
+                    trailing: isSelected
+                        ? const Icon(Icons.check_rounded,
+                            color: AppTheme.accent)
+                        : null,
+                    onTap: () async {
+                      await storage.setSetting(
+                        HiveConstants.appLanguage,
+                        language,
+                      );
+                      ref.read(settingsRefreshProvider.notifier).state++;
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

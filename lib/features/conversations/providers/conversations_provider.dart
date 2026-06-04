@@ -13,7 +13,8 @@ import '../../chat/domain/entities/conversation.dart';
 
 // ── Repository ──────────────────────────────────────────────────────────────
 
-final conversationsRepositoryProvider = Provider<ConversationsRepository>((ref) {
+final conversationsRepositoryProvider =
+    Provider<ConversationsRepository>((ref) {
   return ConversationsRepository(ref.read(storageServiceProvider));
 });
 
@@ -149,6 +150,46 @@ class ConversationsRepository {
     }
   }
 
+  Future<File> exportAllConversations() async {
+    final root = _storageService.storageFolderPath;
+    if (root == null || root.isEmpty) {
+      throw FileSystemException('Storage folder is not configured.');
+    }
+
+    final exportDir = Directory(p.join(root, 'exports'));
+    await exportDir.create(recursive: true);
+
+    final timestamp = DateTime.now()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+    final file = File(p.join(exportDir.path, 'lokus_chats_$timestamp.json'));
+
+    final conversations = getAllConversations();
+    final payload = const JsonEncoder.withIndent('  ').convert({
+      'app': 'Lokus',
+      'exportedAt': DateTime.now().toIso8601String(),
+      'conversationCount': conversations.length,
+      'conversations': conversations.map((convo) {
+        final messages = getMessages(convo.id);
+        return {
+          'id': convo.id,
+          'title': convo.title,
+          'modelId': convo.modelId,
+          'modelName': convo.modelName,
+          'createdAt': convo.createdAt.toIso8601String(),
+          'updatedAt': convo.updatedAt.toIso8601String(),
+          'isPinned': convo.isPinned,
+          'systemPrompt': convo.systemPrompt,
+          'messages': messages.map(_messageToJson).toList(),
+        };
+      }).toList(),
+    });
+
+    await file.writeAsString(payload, flush: true);
+    return file;
+  }
+
   Future<void> _persistConversation(Conversation convo) async {
     final root = _storageService.storageFolderPath;
     if (root == null || root.isEmpty) return;
@@ -218,11 +259,11 @@ final conversationsListProvider = Provider<List<Conversation>>((ref) {
   return ref.read(conversationsRepositoryProvider).getAllConversations();
 });
 
-final currentConversationProvider =
-    StateProvider<Conversation?>((ref) => null);
+final currentConversationProvider = StateProvider<Conversation?>((ref) => null);
 
-final messagesProvider = StateNotifierProvider.family<MessagesNotifier,
-    List<ChatMessage>, String>((ref, conversationId) {
+final messagesProvider =
+    StateNotifierProvider.family<MessagesNotifier, List<ChatMessage>, String>(
+        (ref, conversationId) {
   return MessagesNotifier(
     ref.read(conversationsRepositoryProvider),
     conversationId,

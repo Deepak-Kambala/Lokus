@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../shared/theme/app_theme.dart';
+import '../../../../core/constants/hive_constants.dart';
 import '../../../../services/inference_service.dart';
+import '../../../../services/storage_service.dart';
 import '../../../conversations/providers/conversations_provider.dart';
 import '../../../chat/domain/entities/chat_message.dart';
 import '../../../models/data/repositories/models_repository.dart';
@@ -183,7 +185,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final stream = inference.generateStream(
       history: _compactHistoryForPrompt(history, userMsg.id),
       userMessage: text,
-      systemPrompt: convo.systemPrompt,
+      systemPrompt: _systemPromptForLanguage(convo.systemPrompt),
     );
 
     String accumulated = '';
@@ -324,6 +326,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       return 'Generation failed. Try a smaller model or re-download the file.';
     }
     return 'Error: $text';
+  }
+
+  String? _systemPromptForLanguage(String? conversationPrompt) {
+    final language = ref.read(storageServiceProvider).getSetting<String>(
+          HiveConstants.appLanguage,
+          defaultValue: 'Auto',
+        );
+    final parts = <String>[];
+    final base = conversationPrompt?.trim();
+    if (base != null && base.isNotEmpty) {
+      parts.add(base);
+    }
+    if (language == 'Auto') {
+      parts.add(
+        'Reply in the same language as the user. Answer directly. Do not reveal hidden reasoning, chain-of-thought, internal thoughts, thinking notes, or <think> sections.',
+      );
+    } else {
+      parts.add(
+        'Reply in $language. Answer directly. Do not reveal hidden reasoning, chain-of-thought, internal thoughts, thinking notes, or <think> sections.',
+      );
+    }
+    return parts.join('\n\n');
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────

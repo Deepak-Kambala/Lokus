@@ -322,7 +322,7 @@ class InferenceService {
   }
 
   String _cleanResponse(String text, AiModel model) {
-    var cleaned = text;
+    var cleaned = _stripThinking(text);
     for (final stop in _stopSequencesFor(model)) {
       final index = cleaned.indexOf(stop);
       if (index >= 0) {
@@ -338,6 +338,46 @@ class InferenceService {
             RegExp(r'^\s*<\|start_header_id\|>assistant<\|end_header_id\|>\s*'),
             '');
     return cleaned.trimLeft();
+  }
+
+  String _stripThinking(String text) {
+    var cleaned = text
+        .replaceAll(
+          RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false),
+          '',
+        )
+        .replaceAll(
+          RegExp(r'<thinking>[\s\S]*?</thinking>', caseSensitive: false),
+          '',
+        )
+        .replaceAll(
+          RegExp(
+            r'^\s*(thinking|reasoning|thought|internal reasoning|reasoning process)\s*:\s*[\s\S]*?\n\s*\n',
+            caseSensitive: false,
+          ),
+          '',
+        );
+
+    cleaned = cleaned.replaceFirst(
+      RegExp(
+        r'^\s*\*{0,2}(thinking|reasoning|thought)\*{0,2}\s*[\r\n]+[\s\S]*?\n\s*\n',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    final openThink = RegExp(r'<think>|<thinking>', caseSensitive: false);
+    final openMatch = openThink.firstMatch(cleaned);
+    if (openMatch != null) {
+      cleaned = cleaned.substring(0, openMatch.start);
+    }
+
+    final danglingThink = RegExp(
+      r'<think>|</think>|<thinking>|</thinking>',
+      caseSensitive: false,
+    );
+    cleaned = cleaned.replaceAll(danglingThink, '');
+    return cleaned;
   }
 
   Future<String> _generateText({
