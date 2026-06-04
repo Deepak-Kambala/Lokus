@@ -6,7 +6,7 @@ import '../../../services/storage_service.dart';
 
 // ── Filters ──────────────────────────────────────────────────────────────────
 final selectedCategoryProvider = StateProvider<ModelCategory?>((ref) => null);
-final modelSearchQueryProvider  = StateProvider<String>((ref) => '');
+final modelSearchQueryProvider = StateProvider<String>((ref) => '');
 
 // ── Derived lists ─────────────────────────────────────────────────────────────
 final modelsRefreshProvider = StateProvider<int>((ref) => 0);
@@ -14,8 +14,8 @@ final downloadErrorsProvider = StateProvider<Map<String, String>>((ref) => {});
 
 final browsableModelsProvider = Provider<List<AiModel>>((ref) {
   ref.watch(modelsRefreshProvider);
-  final repo     = ref.read(modelsRepositoryProvider);
-  final query    = ref.watch(modelSearchQueryProvider);
+  final repo = ref.read(modelsRepositoryProvider);
+  final query = ref.watch(modelSearchQueryProvider);
   final category = ref.watch(selectedCategoryProvider);
   return repo.getBrowsableModels(query: query, category: category);
 });
@@ -32,6 +32,7 @@ final activeModelProvider = StateProvider<AiModel?>((ref) {
   if (selectedId == null) return null;
   final model = ref.read(modelsRepositoryProvider).getModelById(selectedId);
   if (model?.status != ModelStatus.downloaded || model?.localPath == null) {
+    storageService.clearSelectedModel();
     return null;
   }
   return model;
@@ -128,7 +129,7 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
   void cancelDownload(String modelId) {
     _dl.cancelDownload(modelId);
     _repo.updateModelStatus(
-      modelId: modelId, status: ModelStatus.available, progress: 0.0);
+        modelId: modelId, status: ModelStatus.available, progress: 0.0);
     _updateState(modelId, ModelStatus.available);
     _ref.read(modelsRefreshProvider.notifier).state++;
   }
@@ -149,7 +150,8 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
 }
 
 final modelManagerProvider =
-    StateNotifierProvider<ModelManagerNotifier, Map<String, ModelStatus>>((ref) {
+    StateNotifierProvider<ModelManagerNotifier, Map<String, ModelStatus>>(
+        (ref) {
   return ModelManagerNotifier(
     ref.read(modelsRepositoryProvider),
     ref.read(downloadServiceProvider),

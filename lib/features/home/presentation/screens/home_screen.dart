@@ -245,7 +245,7 @@ class _WelcomeHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Good ${_greeting()},',
+          'Good ${_greeting()}',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 color: AppTheme.textSecondary,
                 fontWeight: FontWeight.w400,
@@ -266,9 +266,9 @@ class _WelcomeHeader extends StatelessWidget {
 
   String _greeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'morning';
-    if (hour < 18) return 'afternoon';
-    return 'evening';
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
   }
 }
 

@@ -15,6 +15,7 @@ class ModelsRepository {
   Box<AiModel> get _box => Hive.box<AiModel>(HiveConstants.modelsBox);
 
   List<AiModel> getDownloadedModels() {
+    _repairMissingDownloadedModels();
     return _box.values
         .where((m) =>
             m.status == ModelStatus.downloaded &&
@@ -32,11 +33,15 @@ class ModelsRepository {
     final model = _box.get(id);
     if (model?.status == ModelStatus.downloaded &&
         (model?.localPath == null || !_isUsableGguf(model!.localPath!))) {
-      return model?.copyWith(
+      final repaired = model?.copyWith(
         status: ModelStatus.available,
         downloadProgress: 0.0,
         clearLocalPath: true,
       );
+      if (repaired != null) {
+        _box.put(id, repaired);
+      }
+      return repaired;
     }
     return model;
   }
@@ -74,6 +79,20 @@ class ModelsRepository {
     }
 
     return models;
+  }
+
+  void _repairMissingDownloadedModels() {
+    for (final model in _box.values) {
+      if (model.status != ModelStatus.downloaded) continue;
+      if (model.localPath != null && _isUsableGguf(model.localPath!)) continue;
+
+      final repaired = model.copyWith(
+        status: ModelStatus.available,
+        downloadProgress: 0.0,
+        clearLocalPath: true,
+      );
+      _box.put(model.id, repaired);
+    }
   }
 
   Future<void> saveModel(AiModel model) async {

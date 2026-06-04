@@ -10,6 +10,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../services/storage_service.dart';
+import '../../../models/data/repositories/models_repository.dart';
+import '../../../models/providers/models_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -397,6 +399,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
       if (path == null) return;
 
       await _ensureWritableFolder(path);
+      await _resetModelsAfterStorageChange(ref);
       await ref.read(storageServiceProvider).updateStorageFolder(
             folderUri: path,
             folderPath: path,
@@ -463,6 +466,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
 
       final path = '${parent.replaceFirst(RegExp(r'/$'), '')}/$folderName';
       await _ensureWritableFolder(path);
+      await _resetModelsAfterStorageChange(ref);
       await ref.read(storageServiceProvider).updateStorageFolder(
             folderUri: path,
             folderPath: path,
@@ -502,6 +506,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
   Future<void> _useDefaultStorage(WidgetRef ref) async {
     final path = await _defaultStoragePath();
     await _ensureWritableFolder(path);
+    await _resetModelsAfterStorageChange(ref);
     await ref.read(storageServiceProvider).updateStorageFolder(
           folderUri: path,
           folderPath: path,
@@ -564,5 +569,16 @@ class _ChangeFolderSheet extends ConsumerWidget {
       throw FileSystemException('Device storage is not available.');
     }
     return '${baseDir.path}/Lokus';
+  }
+
+  Future<void> _resetModelsAfterStorageChange(WidgetRef ref) async {
+    final repo = ref.read(modelsRepositoryProvider);
+    final downloaded = ref.read(downloadedModelsProvider);
+    for (final model in downloaded) {
+      await repo.deleteModel(model.id);
+    }
+    await ref.read(storageServiceProvider).clearSelectedModel();
+    ref.read(activeModelProvider.notifier).state = null;
+    ref.read(modelsRefreshProvider.notifier).state++;
   }
 }
