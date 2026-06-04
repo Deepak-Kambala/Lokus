@@ -161,7 +161,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     await ref
         .read(messagesProvider(widget.conversationId).notifier)
         .addMessage(userMsg);
-    _scrollToBottom();
+    _scrollToBottom(force: true);
 
     // Add empty assistant bubble for streaming
     final assistantId = const Uuid().v4();
@@ -229,7 +229,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               tokensPerSecond: tps,
             ));
         if (mounted) setState(() => _isGenerating = false);
-        _scrollToBottom();
+        _scrollToBottom(force: true);
       },
       onError: (e) async {
         await ref
@@ -253,9 +253,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool force = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
+        final distanceFromBottom =
+            _scrollCtrl.position.maxScrollExtent - _scrollCtrl.offset;
+        if (!force && distanceFromBottom > 120) return;
         _scrollCtrl.animateTo(
           _scrollCtrl.position.maxScrollExtent,
           duration: const Duration(milliseconds: 280),
@@ -663,7 +666,7 @@ class _MessageBubble extends StatelessWidget {
           if (!isUser && !message.isStreaming && message.content.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: _MessageActions(message: message),
+              child: _CopyMessageAction(message: message),
             ),
         ],
       ),
@@ -783,9 +786,9 @@ class _TokenStats extends StatelessWidget {
   }
 }
 
-class _MessageActions extends StatelessWidget {
+class _CopyMessageAction extends StatelessWidget {
   final ChatMessage message;
-  const _MessageActions({required this.message});
+  const _CopyMessageAction({required this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -802,16 +805,6 @@ class _MessageActions extends StatelessWidget {
             ));
           },
         ),
-        const SizedBox(width: 4),
-        _ActionBtn(
-            icon: Icons.thumb_up_outlined,
-            tooltip: 'Good response',
-            onTap: () {}),
-        const SizedBox(width: 4),
-        _ActionBtn(
-            icon: Icons.thumb_down_outlined,
-            tooltip: 'Bad response',
-            onTap: () {}),
       ],
     );
   }

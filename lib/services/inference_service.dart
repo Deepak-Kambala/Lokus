@@ -40,7 +40,7 @@ class InferenceService {
           modelPath: model.localPath!,
           nThreads: 2,
           nGpuLayers: 0,
-          contextSize: 768,
+          contextSize: 2048,
           batchSize: 64,
         ),
       );
@@ -64,7 +64,7 @@ class InferenceService {
     required List<ChatMessage> history,
     required String userMessage,
     double temperature = 0.7,
-    int maxTokens = 160,
+    int maxTokens = 0,
     String? systemPrompt,
   }) async* {
     if (_loadedModel == null) {
@@ -361,7 +361,7 @@ class InferenceService {
                   useStopSequences ? _stopSequencesFor(model) : const [],
             ),
           )
-          .timeout(const Duration(minutes: 2));
+          .timeout(const Duration(minutes: 10));
       AppLog.debug(
         '[Inference] Raw response length=${response.text.length}, tokens=${response.tokensGenerated}',
       );

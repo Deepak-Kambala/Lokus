@@ -272,10 +272,11 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
     std::string result;
     int n_generated = 0;
     int n_pos = prompt_tokens.size();
+    const int effective_max_tokens = max_tokens > 0 ? max_tokens : n_ctx;
     
     g_should_stop = false;
     
-    for (int i = 0; i < max_tokens; i++) {
+    for (int i = 0; i < effective_max_tokens; i++) {
         if (g_should_stop) {
             LOGI("Generation stopped by user");
             break;
@@ -406,7 +407,8 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
     
     // Pre-generate tokens and convert to strings
     int n_pos = prompt_tokens.size();
-    for (int i = 0; i < max_tokens; i++) {
+    const int effective_max_tokens = max_tokens > 0 ? max_tokens : n_ctx;
+    for (int i = 0; i < effective_max_tokens; i++) {
         if (g_should_stop) break;
         
         llama_token new_token = llama_sampler_sample(g_sampler, g_context, -1);
