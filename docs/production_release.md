@@ -34,5 +34,7 @@ flutter build appbundle --release
 ## Privacy
 
 Lokus stores chats and downloaded GGUF models locally on the device. The app
-does not request broad Android storage, media, notification, or foreground
-service permissions in the production manifest.
+requests Android all-files storage access only so users can choose and create
+real filesystem folders for GGUF model downloads. The app does not request
+media, notification, or foreground service permissions in the production
+manifest.

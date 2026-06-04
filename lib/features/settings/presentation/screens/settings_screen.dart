@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -355,7 +357,16 @@ class _ChangeFolderSheet extends ConsumerWidget {
             child: ElevatedButton.icon(
               onPressed: () => _chooseFolder(context, ref),
               icon: const Icon(Icons.folder_open_rounded, size: 16),
-              label: const Text('Use Device Storage'),
+              label: const Text('Choose Folder'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _createFolder(context, ref),
+              icon: const Icon(Icons.create_new_folder_outlined, size: 16),
+              label: const Text('Create Folder'),
             ),
           ),
           const SizedBox(height: 12),
@@ -374,10 +385,83 @@ class _ChangeFolderSheet extends ConsumerWidget {
 
   Future<void> _chooseFolder(BuildContext context, WidgetRef ref) async {
     try {
-      final hasPermission = await _ensureStoragePermission(context);
+      final hasPermission = await _ensureExternalStoragePermission(
+        context,
+        ref,
+      );
       if (!hasPermission) return;
 
-      final path = await _defaultStoragePath();
+      final path = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Choose Lokus storage folder',
+      );
+      if (path == null) return;
+
+      await _ensureWritableFolder(path);
+      await ref.read(storageServiceProvider).updateStorageFolder(
+            folderUri: path,
+            folderPath: path,
+          );
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Storage folder updated')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Storage folder is not writable: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _createFolder(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController(text: 'Lokus');
+    final folderName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceElevated,
+        title: const Text('Create Folder'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Folder name',
+            hintText: 'Lokus',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    if (folderName == null || folderName.isEmpty) return;
+    if (!context.mounted) return;
+
+    try {
+      final hasPermission = await _ensureExternalStoragePermission(
+        context,
+        ref,
+      );
+      if (!hasPermission) return;
+
+      final parent = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Choose parent location',
+      );
+      if (parent == null) return;
+
+      final path = '${parent.replaceFirst(RegExp(r'/$'), '')}/$folderName';
       await _ensureWritableFolder(path);
       await ref.read(storageServiceProvider).updateStorageFolder(
             folderUri: path,
@@ -415,8 +499,61 @@ class _ChangeFolderSheet extends ConsumerWidget {
     }
   }
 
-  Future<bool> _ensureStoragePermission(BuildContext context) async {
-    return true;
+  Future<void> _useDefaultStorage(WidgetRef ref) async {
+    final path = await _defaultStoragePath();
+    await _ensureWritableFolder(path);
+    await ref.read(storageServiceProvider).updateStorageFolder(
+          folderUri: path,
+          folderPath: path,
+        );
+  }
+
+  Future<bool> _ensureExternalStoragePermission(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    if (!Platform.isAndroid) return true;
+    if (await Permission.manageExternalStorage.isGranted) return true;
+
+    final status = await Permission.manageExternalStorage.request();
+    if (status.isGranted) return true;
+
+    if (!context.mounted) return false;
+    final useAppStorage = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceElevated,
+        title: const Text('Storage Access Needed'),
+        content: const Text(
+          'Choosing any folder requires Android all-files access. You can use the app storage folder without this permission.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Use App Storage'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              openAppSettings();
+              Navigator.pop(ctx, false);
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+
+    if (useAppStorage == true) {
+      await _useDefaultStorage(ref);
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Storage folder updated')),
+        );
+      }
+      return false;
+    }
+    return false;
   }
 
   Future<String> _defaultStoragePath() async {
