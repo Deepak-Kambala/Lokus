@@ -25,113 +25,116 @@ class StorageSetupScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 60),
-              // Logo / Icon
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppTheme.accentSurface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppTheme.accentDim, width: 1),
-                ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: AppTheme.accent,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                'Select Storage\nLocation',
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      height: 1.15,
-                      letterSpacing: -1,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Choose where AI models and app data will be stored on your device.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
-              ),
-              const SizedBox(height: 40),
-              // Storage info cards
-              _StorageInfoRow(),
-              const SizedBox(height: 32),
-              // Selected folder display
-              if (selectedPath != null)
-                _SelectedFolderCard(path: selectedPath)
-              else
-                _EmptyFolderCard(),
-              const SizedBox(height: 16),
-              // Folder action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: _FolderButton(
-                      icon: Icons.folder_open_rounded,
-                      label: 'Choose Folder',
-                      onTap: () => _pickFolder(context, ref),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _FolderButton(
-                      icon: Icons.create_new_folder_outlined,
-                      label: 'Create Folder',
-                      onTap: () => _createNewFolder(context, ref),
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              // What will be stored
-              _StorageItemsList(),
-              const SizedBox(height: 24),
-              // Continue button
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: selectedPath != null && !isLoading
-                      ? () => _continue(context, ref)
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accent,
-                    disabledBackgroundColor: AppTheme.surfaceHighlight,
-                    disabledForegroundColor: AppTheme.textTertiary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.black,
-                          ),
-                        )
-                      : const Text(
-                          'Continue',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 52),
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentSurface,
+                          borderRadius: BorderRadius.circular(16),
+                          border:
+                              Border.all(color: AppTheme.accentDim, width: 1),
                         ),
+                        child: const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: AppTheme.accent,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Text(
+                        'Select Storage\nLocation',
+                        style: Theme.of(context)
+                            .textTheme
+                            .displayLarge
+                            ?.copyWith(height: 1.15),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Choose where AI models and app data will be stored on your device.',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                      ),
+                      const SizedBox(height: 32),
+                      _StorageInfoRow(),
+                      const SizedBox(height: 28),
+                      if (selectedPath != null)
+                        _SelectedFolderCard(path: selectedPath)
+                      else
+                        _EmptyFolderCard(),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _FolderButton(
+                              icon: Icons.folder_open_rounded,
+                              label: 'Choose Folder',
+                              onTap: () => _pickFolder(context, ref),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _FolderButton(
+                              icon: Icons.create_new_folder_outlined,
+                              label: 'Create Folder',
+                              onTap: () => _createNewFolder(context, ref),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      const SizedBox(height: 34),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: selectedPath != null && !isLoading
+                              ? () => _continue(context, ref)
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.accent,
+                            disabledBackgroundColor: AppTheme.surfaceHighlight,
+                            disabledForegroundColor: AppTheme.textTertiary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
+                                )
+                              : const Text(
+                                  'Continue',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 32),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -500,52 +503,6 @@ class _EmptyFolderCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _StorageItemsList extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      ('Downloaded AI models (.gguf)', Icons.memory_rounded),
-      ('Chat history & conversations', Icons.chat_rounded),
-      ('System prompts & templates', Icons.description_rounded),
-      ('App cache & metadata', Icons.folder_special_rounded),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'WHAT GETS STORED',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textTertiary,
-            letterSpacing: 1.2,
-          ),
-        ),
-        const SizedBox(height: 10),
-        ...items.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Icon(item.$2, size: 14, color: AppTheme.textSecondary),
-                const SizedBox(width: 10),
-                Text(
-                  item.$1,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
