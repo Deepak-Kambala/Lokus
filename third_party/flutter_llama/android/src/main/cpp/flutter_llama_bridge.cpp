@@ -117,6 +117,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeInitModel(
     g_sampler = llama_sampler_chain_init(sparams);
     
     // Add samplers
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(64, 1.1f, 0.0f, 0.0f));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(0.8f));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(0.95f, 1));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(40));
@@ -179,6 +180,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
     
     auto sparams = llama_sampler_chain_default_params();
     g_sampler = llama_sampler_chain_init(sparams);
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(64, repeat_penalty, 0.0f, 0.0f));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temperature));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(top_p, 1));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(top_k));
@@ -199,6 +201,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
         
         // Sample next token
         llama_token new_token = llama_sampler_sample(g_sampler, g_context, -1);
+        llama_sampler_accept(g_sampler, new_token);
         
         // Check for EOS
         if (llama_vocab_is_eog(g_vocab, new_token)) {
@@ -303,6 +306,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
     
     auto sparams = llama_sampler_chain_default_params();
     g_sampler = llama_sampler_chain_init(sparams);
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(64, repeat_penalty, 0.0f, 0.0f));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temperature));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(top_p, 1));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(top_k));
@@ -314,6 +318,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
         if (g_should_stop) break;
         
         llama_token new_token = llama_sampler_sample(g_sampler, g_context, -1);
+        llama_sampler_accept(g_sampler, new_token);
         
         if (llama_vocab_is_eog(g_vocab, new_token)) {
             break;

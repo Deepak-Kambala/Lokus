@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -228,11 +227,26 @@ class _SystemPromptsSheet extends StatelessWidget {
   const _SystemPromptsSheet({required this.scrollController});
 
   static const _presets = [
-    ('Helpful Assistant', 'You are a helpful, harmless, and honest AI assistant.'),
-    ('Code Expert', 'You are an expert software engineer. Write clean, efficient, well-documented code. Always explain your approach.'),
-    ('Creative Writer', 'You are a creative writing assistant. Help craft engaging stories, vivid descriptions, and compelling characters.'),
-    ('Socratic Teacher', 'You are a teacher who uses the Socratic method. Guide the student to discover answers through thoughtful questions.'),
-    ('Concise Analyst', 'You are an analytical assistant. Provide concise, structured answers. Use bullet points and headers when appropriate.'),
+    (
+      'Helpful Assistant',
+      'You are a helpful, harmless, and honest AI assistant.'
+    ),
+    (
+      'Code Expert',
+      'You are an expert software engineer. Write clean, efficient, well-documented code. Always explain your approach.'
+    ),
+    (
+      'Creative Writer',
+      'You are a creative writing assistant. Help craft engaging stories, vivid descriptions, and compelling characters.'
+    ),
+    (
+      'Socratic Teacher',
+      'You are a teacher who uses the Socratic method. Guide the student to discover answers through thoughtful questions.'
+    ),
+    (
+      'Concise Analyst',
+      'You are an analytical assistant. Provide concise, structured answers. Use bullet points and headers when appropriate.'
+    ),
   ];
 
   @override
@@ -406,23 +420,6 @@ class _ChangeFolderSheet extends ConsumerWidget {
   }
 
   Future<bool> _ensureStoragePermission(BuildContext context) async {
-    if (!Platform.isAndroid) return true;
-
-    if (await Permission.manageExternalStorage.isGranted) return true;
-
-    final status = await Permission.manageExternalStorage.request();
-    if (status.isGranted) return true;
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Storage permission is required to save models in a chosen folder.',
-          ),
-        ),
-      );
-      await openAppSettings();
-    }
-    return false;
+    return true;
   }
 }

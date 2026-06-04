@@ -4,6 +4,7 @@ import '../../domain/entities/ai_model.dart';
 import '../../providers/models_provider.dart';
 import '../../../../services/storage_service.dart';
 import '../../../../shared/theme/app_theme.dart';
+import 'model_logo.dart';
 
 class DownloadedModelCard extends ConsumerWidget {
   final AiModel model;
@@ -14,108 +15,70 @@ class DownloadedModelCard extends ConsumerWidget {
     final isActive = ref.watch(activeModelProvider)?.id == model.id;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isActive ? AppTheme.accentSurface : AppTheme.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isActive ? AppTheme.accentDim : AppTheme.border,
         ),
       ),
-      child: Column(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceHighlight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    model.providerIcon,
-                    style: const TextStyle(fontSize: 20),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          ModelLogo(value: model.providerIcon, size: 42),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            model.name,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
+                    Expanded(
+                      child: Text(
+                        model.name,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
                         ),
-                        if (isActive)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppTheme.accentDim,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text(
-                              'ACTIVE',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.accentLight,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                          ),
-                      ],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Text(
-                          model.provider,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.textSecondary,
+                    if (isActive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentDim,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'ACTIVE',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.accentLight,
+                            letterSpacing: 0.8,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          model.categoryLabel,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.textTertiary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          model.sizeString,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.textTertiary,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
+                const SizedBox(height: 4),
+                Text(
+                  '${model.provider} · ${model.categoryLabel} · ${model.sizeString}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                    height: 1.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
                   onTap: () {
                     ref.read(storageServiceProvider).setSelectedModel(model.id);
                     ref.read(activeModelProvider.notifier).state = model;
@@ -127,65 +90,54 @@ class DownloadedModelCard extends ConsumerWidget {
                     );
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: isActive
                           ? AppTheme.accentDim
                           : AppTheme.surfaceHighlight,
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: isActive
-                            ? AppTheme.accentDim
-                            : AppTheme.border,
+                        color: isActive ? AppTheme.accentDim : AppTheme.border,
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          isActive
-                              ? Icons.check_rounded
-                              : Icons.play_arrow_rounded,
-                          size: 14,
-                          color: isActive
-                              ? AppTheme.accentLight
-                              : AppTheme.textSecondary,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          isActive ? 'Selected' : 'Use Model',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isActive
-                                ? AppTheme.accentLight
-                                : AppTheme.textPrimary,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      isActive ? 'Selected' : 'Use Model',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isActive
+                            ? AppTheme.accentLight
+                            : AppTheme.textPrimary,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => _confirmDelete(context, ref),
-                child: Container(
-                  padding: const EdgeInsets.all(9),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(9),
-                    border: Border.all(
-                        color: AppTheme.error.withOpacity(0.2)),
-                  ),
-                  child: const Icon(
-                    Icons.delete_outline_rounded,
-                    size: 16,
-                    color: AppTheme.error,
-                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Tooltip(
+            message: 'Delete model',
+            child: GestureDetector(
+              onTap: () => _confirmDelete(context, ref),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceHighlight,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: const Icon(
+                  Icons.delete_outline_rounded,
+                  size: 17,
+                  color: AppTheme.textSecondary,
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),

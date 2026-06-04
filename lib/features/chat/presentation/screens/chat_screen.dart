@@ -14,6 +14,7 @@ import '../../../models/providers/models_provider.dart';
 import '../../domain/entities/conversation.dart';
 import '../../../home/widgets/conversation_drawer.dart';
 import '../../../home/widgets/model_selector_button.dart';
+import '../../../home/widgets/new_chat_button.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String conversationId;
@@ -32,11 +33,11 @@ class ChatScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
-  final _scaffoldKey  = GlobalKey<ScaffoldState>();
-  final _inputCtrl    = TextEditingController();
-  final _scrollCtrl   = ScrollController();
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _inputCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
 
-  bool _hasText     = false;
+  bool _hasText = false;
   bool _isGenerating = false;
   bool _isLoadingModel = false;
   String? _modelLoadError;
@@ -72,7 +73,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<bool> _ensureModelLoaded() async {
     final inference = ref.read(inferenceServiceProvider);
-    final model     = ref.read(activeModelProvider);
+    final model = ref.read(activeModelProvider);
 
     if (model == null) {
       _showSnack('No model selected. Pick one from the model manager.');
@@ -115,7 +116,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!ready) return;
 
     _inputCtrl.clear();
-    setState(() { _hasText = false; _isGenerating = true; });
+    setState(() {
+      _hasText = false;
+      _isGenerating = true;
+    });
 
     // Persist user message
     final userMsg = ChatMessage(
@@ -125,12 +129,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       content: text,
       timestamp: DateTime.now(),
     );
-    await ref.read(messagesProvider(widget.conversationId).notifier)
+    await ref
+        .read(messagesProvider(widget.conversationId).notifier)
         .addMessage(userMsg);
     _scrollToBottom();
 
     // Add empty assistant bubble for streaming
-    final assistantId  = const Uuid().v4();
+    final assistantId = const Uuid().v4();
     final assistantMsg = ChatMessage(
       id: assistantId,
       conversationId: widget.conversationId,
@@ -139,22 +144,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       timestamp: DateTime.now(),
       isStreaming: true,
     );
-    await ref.read(messagesProvider(widget.conversationId).notifier)
+    await ref
+        .read(messagesProvider(widget.conversationId).notifier)
         .addMessage(assistantMsg);
 
     // Fetch conversation system prompt if any
-    final convo = ref.read(conversationsRepositoryProvider)
+    final convo = ref
+        .read(conversationsRepositoryProvider)
         .getById(widget.conversationId);
 
     final history = ref.read(messagesProvider(widget.conversationId));
 
     final inference = ref.read(inferenceServiceProvider);
-    final stream    = inference.generateStream(
+    final stream = inference.generateStream(
       history: history
           .where((m) =>
-              m.id != userMsg.id &&
-              !m.isStreaming &&
-              m.content.isNotEmpty)
+              m.id != userMsg.id && !m.isStreaming && m.content.isNotEmpty)
           .toList(),
       userMessage: text,
       systemPrompt: convo?.systemPrompt,
@@ -166,37 +171,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _streamSub = stream.listen(
       (token) {
         accumulated += token;
-        ref.read(messagesProvider(widget.conversationId).notifier)
+        ref
+            .read(messagesProvider(widget.conversationId).notifier)
             .updateLastMessage(assistantMsg.copyWith(
-          content: accumulated,
-          isStreaming: true,
-        ));
+              content: accumulated,
+              isStreaming: true,
+            ));
         _scrollToBottom();
       },
       onDone: () async {
-        final elapsed = DateTime.now()
-            .difference(startTime).inMilliseconds / 1000;
+        if (accumulated.trim().isEmpty) {
+          await ref
+              .read(messagesProvider(widget.conversationId).notifier)
+              .updateLastMessage(assistantMsg.copyWith(
+                content:
+                    'Error: The model returned no text. Try Qwen2.5 0.5B, Gemma 3 1B, or Llama 3.2 1B.',
+                isStreaming: false,
+                isError: true,
+              ));
+          if (mounted) setState(() => _isGenerating = false);
+          return;
+        }
+
+        final elapsed =
+            DateTime.now().difference(startTime).inMilliseconds / 1000;
         final tokenCount = accumulated.split(' ').length;
         final tps = elapsed > 0 ? tokenCount / elapsed : 0.0;
 
-        await ref.read(messagesProvider(widget.conversationId).notifier)
+        await ref
+            .read(messagesProvider(widget.conversationId).notifier)
             .updateLastMessage(assistantMsg.copyWith(
-          content: accumulated,
-          isStreaming: false,
-          tokenCount: tokenCount,
-          generationSeconds: elapsed,
-          tokensPerSecond: tps,
-        ));
+              content: accumulated,
+              isStreaming: false,
+              tokenCount: tokenCount,
+              generationSeconds: elapsed,
+              tokensPerSecond: tps,
+            ));
         if (mounted) setState(() => _isGenerating = false);
         _scrollToBottom();
       },
       onError: (e) async {
-        await ref.read(messagesProvider(widget.conversationId).notifier)
+        await ref
+            .read(messagesProvider(widget.conversationId).notifier)
             .updateLastMessage(assistantMsg.copyWith(
-          content: 'Error: $e',
-          isStreaming: false,
-          isError: true,
-        ));
+              content: 'Error: $e',
+              isStreaming: false,
+              isError: true,
+            ));
         if (mounted) setState(() => _isGenerating = false);
       },
       cancelOnError: true,
@@ -225,8 +246,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _showSnack(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -234,7 +254,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final messages = ref.watch(messagesProvider(widget.conversationId));
-    final convo    = ref.watch(conversationsRepositoryProvider)
+    final convo = ref
+        .watch(conversationsRepositoryProvider)
         .getById(widget.conversationId);
 
     return Scaffold(
@@ -270,6 +291,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final activeModel = ref.watch(activeModelProvider);
     return AppBar(
       backgroundColor: AppTheme.background,
+      toolbarHeight: activeModel == null ? 62 : 70,
       leading: IconButton(
         icon: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary),
         onPressed: () => _scaffoldKey.currentState?.openDrawer(),
@@ -292,11 +314,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.edit_outlined, color: AppTheme.textSecondary),
-          onPressed: _newChat,
-        ),
-        const SizedBox(width: 8),
+        NewChatButton(onPressed: _newChat),
+        const SizedBox(width: 12),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
@@ -312,7 +331,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       padding: EdgeInsets.only(
-        left: 12, right: 12, top: 10,
+        left: 12,
+        right: 12,
+        top: 10,
         bottom: MediaQuery.of(context).padding.bottom + 10,
       ),
       child: Row(
@@ -405,9 +426,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         icon: Icon(
                           Icons.arrow_upward_rounded,
                           size: 16,
-                          color: _hasText
-                              ? Colors.black
-                              : AppTheme.textTertiary,
+                          color:
+                              _hasText ? Colors.black : AppTheme.textTertiary,
                         ),
                         onPressed: _hasText ? _sendMessage : null,
                         padding: EdgeInsets.zero,
@@ -422,7 +442,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final model = ref.read(activeModelProvider);
     if (model == null) return;
 
-    final repo  = ref.read(conversationsRepositoryProvider);
+    final repo = ref.read(conversationsRepositoryProvider);
     final convo = await repo.createConversation(
       modelId: model.id,
       modelName: model.name,
@@ -444,16 +464,18 @@ class _LoadingModelBanner extends StatelessWidget {
       child: const Row(
         children: [
           SizedBox(
-            width: 14, height: 14,
+            width: 14,
+            height: 14,
             child: CircularProgressIndicator(
-              strokeWidth: 2, color: AppTheme.accentLight),
+                strokeWidth: 2, color: AppTheme.accentLight),
           ),
           SizedBox(width: 10),
           Text(
             'Loading model into memory…',
             style: TextStyle(
-              fontSize: 12, color: AppTheme.accentLight,
-              fontWeight: FontWeight.w500),
+                fontSize: 12,
+                color: AppTheme.accentLight,
+                fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -479,8 +501,7 @@ class _ErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                fontSize: 12, color: AppTheme.error),
+              style: const TextStyle(fontSize: 12, color: AppTheme.error),
             ),
           ),
           GestureDetector(
@@ -513,8 +534,7 @@ class _MessageList extends StatelessWidget {
       controller: scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       itemCount: messages.length,
-      itemBuilder: (context, index) =>
-          _MessageBubble(message: messages[index]),
+      itemBuilder: (context, index) => _MessageBubble(message: messages[index]),
     );
   }
 }
@@ -540,7 +560,8 @@ class _MessageBubble extends StatelessWidget {
             children: [
               if (!isUser)
                 Container(
-                  width: 24, height: 24,
+                  width: 24,
+                  height: 24,
                   margin: const EdgeInsets.only(right: 8, bottom: 4),
                   decoration: BoxDecoration(
                     color: AppTheme.accentSurface,
@@ -552,12 +573,14 @@ class _MessageBubble extends StatelessWidget {
               Text(
                 isUser ? 'You' : 'Assistant',
                 style: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary),
               ),
               if (isUser)
                 Container(
-                  width: 24, height: 24,
+                  width: 24,
+                  height: 24,
                   margin: const EdgeInsets.only(left: 8, bottom: 4),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceHighlight,
@@ -571,17 +594,14 @@ class _MessageBubble extends StatelessWidget {
           // Bubble
           Container(
             constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.85),
+                maxWidth: MediaQuery.of(context).size.width * 0.85),
             margin: EdgeInsets.only(
               left: isUser ? 40 : 0,
               right: isUser ? 0 : 40,
             ),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: isUser
-                  ? AppTheme.userBubble
-                  : AppTheme.assistantBubble,
+              color: isUser ? AppTheme.userBubble : AppTheme.assistantBubble,
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(16),
                 topRight: const Radius.circular(16),
@@ -599,8 +619,7 @@ class _MessageBubble extends StatelessWidget {
                 : _BubbleContent(message: message),
           ),
           // Actions row for assistant
-          if (!isUser && !message.isStreaming &&
-              message.content.isNotEmpty)
+          if (!isUser && !message.isStreaming && message.content.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: _MessageActions(message: message),
@@ -626,8 +645,7 @@ class _BubbleContent extends StatelessWidget {
           Expanded(
             child: Text(
               message.content,
-              style: const TextStyle(
-                  fontSize: 13, color: AppTheme.error),
+              style: const TextStyle(fontSize: 13, color: AppTheme.error),
             ),
           ),
         ],
@@ -655,8 +673,7 @@ class _BubbleContent extends StatelessWidget {
             padding: const EdgeInsets.only(top: 4),
             child: _CursorBlink(),
           ),
-        if (!message.isStreaming &&
-            (message.tokenCount ?? 0) > 0)
+        if (!message.isStreaming && (message.tokenCount ?? 0) > 0)
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: _TokenStats(message: message),
@@ -666,32 +683,42 @@ class _BubbleContent extends StatelessWidget {
   }
 
   MarkdownStyleSheet _mdStyle() => MarkdownStyleSheet(
-    p: const TextStyle(
-        fontSize: 14, color: AppTheme.textPrimary,
-        height: 1.55, fontFamily: 'Inter'),
-    code: const TextStyle(
-        fontSize: 12, color: AppTheme.accentLight,
-        backgroundColor: AppTheme.accentSurface,
-        fontFamily: 'monospace'),
-    codeblockDecoration: BoxDecoration(
-      color: AppTheme.surfaceHighlight,
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: AppTheme.border),
-    ),
-    h1: const TextStyle(
-        fontSize: 18, fontWeight: FontWeight.w700,
-        color: AppTheme.textPrimary, fontFamily: 'Inter'),
-    h2: const TextStyle(
-        fontSize: 16, fontWeight: FontWeight.w600,
-        color: AppTheme.textPrimary, fontFamily: 'Inter'),
-    h3: const TextStyle(
-        fontSize: 15, fontWeight: FontWeight.w600,
-        color: AppTheme.textPrimary, fontFamily: 'Inter'),
-    strong: const TextStyle(
-        fontWeight: FontWeight.w700,
-        color: AppTheme.textPrimary, fontFamily: 'Inter'),
-    listBullet: const TextStyle(color: AppTheme.accent),
-  );
+        p: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textPrimary,
+            height: 1.55,
+            fontFamily: 'Inter'),
+        code: const TextStyle(
+            fontSize: 12,
+            color: AppTheme.accentLight,
+            backgroundColor: AppTheme.accentSurface,
+            fontFamily: 'monospace'),
+        codeblockDecoration: BoxDecoration(
+          color: AppTheme.surfaceHighlight,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.border),
+        ),
+        h1: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+            fontFamily: 'Inter'),
+        h2: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+            fontFamily: 'Inter'),
+        h3: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+            fontFamily: 'Inter'),
+        strong: const TextStyle(
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+            fontFamily: 'Inter'),
+        listBullet: const TextStyle(color: AppTheme.accent),
+      );
 }
 
 class _TokenStats extends StatelessWidget {
@@ -710,8 +737,7 @@ class _TokenStats extends StatelessWidget {
     return Text(
       parts.join(' · '),
       style: const TextStyle(
-          fontSize: 10, color: AppTheme.textTertiary,
-          fontFamily: 'monospace'),
+          fontSize: 10, color: AppTheme.textTertiary, fontFamily: 'monospace'),
     );
   }
 }
@@ -810,11 +836,11 @@ class _TypingIndicatorState extends State<_TypingIndicator>
         children: List.generate(3, (i) {
           final delay = i * 0.3;
           final t = (_ctrl.value - delay).clamp(0.0, 1.0);
-          final opacity = 0.3 +
-              0.7 * (1 - (t - 0.5).abs() * 2).clamp(0.0, 1.0);
+          final opacity = 0.3 + 0.7 * (1 - (t - 0.5).abs() * 2).clamp(0.0, 1.0);
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 2),
-            width: 6, height: 6,
+            width: 6,
+            height: 6,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: AppTheme.accent.withOpacity(opacity),
@@ -839,18 +865,21 @@ class _CursorBlinkState extends State<_CursorBlink>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 600))
+        vsync: this, duration: const Duration(milliseconds: 600))
       ..repeat(reverse: true);
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => FadeTransition(
-    opacity: _ctrl,
-    child: Container(width: 2, height: 14, color: AppTheme.accent),
-  );
+        opacity: _ctrl,
+        child: Container(width: 2, height: 14, color: AppTheme.accent),
+      );
 }
 
 class _EmptyChat extends StatelessWidget {
@@ -866,7 +895,8 @@ class _EmptyChat extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 60, height: 60,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 color: AppTheme.accentSurface,
                 borderRadius: BorderRadius.circular(18),
@@ -884,8 +914,7 @@ class _EmptyChat extends StatelessWidget {
             const SizedBox(height: 8),
             const Text(
               'Model loads on your first message.',
-              style: TextStyle(
-                  fontSize: 13, color: AppTheme.textSecondary),
+              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],

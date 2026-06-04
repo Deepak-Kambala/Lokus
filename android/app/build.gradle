@@ -22,8 +22,14 @@ if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
-    namespace "com.example.lokus"
+    namespace "com.lokus.app"
     compileSdk 36
     ndkVersion "28.2.13676358"
 
@@ -41,7 +47,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.lokus"
+        applicationId "com.lokus.app"
         minSdkVersion 26
         targetSdk 36
         versionCode flutterVersionCode.toInteger()
@@ -73,12 +79,35 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
-            minifyEnabled false
-            shrinkResources false
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+gradle.taskGraph.whenReady { taskGraph ->
+    def releaseRequested = gradle.startParameter.taskNames.any { taskName ->
+        taskName.toLowerCase().contains('release') || taskName.toLowerCase().contains('bundle')
+    }
+    if (releaseRequested && !keystorePropertiesFile.exists()) {
+        throw new GradleException("Missing android/key.properties. Configure a release keystore before building production artifacts.")
     }
 }
 

@@ -1,4 +1,4 @@
-package com.example.lokus
+package com.lokus.app
 
 import io.flutter.embedding.android.FlutterActivity
 

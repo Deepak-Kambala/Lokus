@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:ui';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,8 +14,24 @@ import 'features/models/domain/entities/ai_model.dart';
 import 'router/app_router.dart';
 import 'shared/theme/app_theme.dart';
 
-void main() async {
+void main() {
+  runZonedGuarded(() async {
+    await _bootstrap();
+  }, _recordFatalError);
+}
+
+Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    _recordFatalError(details.exception, details.stack);
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    _recordFatalError(error, stack);
+    return true;
+  };
 
   // Lock to portrait
   await SystemChrome.setPreferredOrientations([
@@ -51,6 +71,15 @@ void main() async {
       child: LokusApp(),
     ),
   );
+}
+
+void _recordFatalError(Object error, StackTrace? stackTrace) {
+  if (kDebugMode) {
+    debugPrint('Uncaught app error: $error');
+    if (stackTrace != null) {
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
 }
 
 class LokusApp extends ConsumerWidget {

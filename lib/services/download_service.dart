@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import '../core/utils/app_log.dart';
 import '../features/models/domain/entities/ai_model.dart';
 import 'storage_service.dart';
 
@@ -12,7 +12,7 @@ final downloadServiceProvider = Provider<DownloadService>((ref) {
 
 class DownloadProgress {
   final String modelId;
-  final double progress;    // 0.0–1.0
+  final double progress; // 0.0–1.0
   final double speedMbps;
   final int etaSeconds;
   final int receivedBytes;
@@ -38,8 +38,7 @@ class DownloadService {
     // Follow HuggingFace CDN redirects (lfs.githubusercontent.com, etc.)
     followRedirects: true,
     maxRedirects: 10,
-    validateStatus: (status) =>
-        status != null && status >= 200 && status < 300,
+    validateStatus: (status) => status != null && status >= 200 && status < 300,
   ));
 
   final Map<String, CancelToken> _tokens = {};
@@ -55,7 +54,8 @@ class DownloadService {
   }) async {
     final folder = _storageService.storageFolderPath;
     if (folder == null) {
-      onError('Storage folder not configured. Open Settings → Storage Location.');
+      onError(
+          'Storage folder not configured. Open Settings → Storage Location.');
       return '';
     }
 
@@ -86,10 +86,10 @@ class DownloadService {
       final tmpLength = await tmpFile.length();
       if (tmpLength >= 4 && !await _looksLikeGguf(tmpFile)) {
         await tmpFile.delete();
-        debugPrint('[Download] Deleted invalid partial file for ${model.name}');
+        AppLog.debug('[Download] Deleted invalid partial file for ${model.id}');
       } else {
         startByte = tmpLength;
-        debugPrint('[Download] Resuming ${model.name} from byte $startByte');
+        AppLog.debug('[Download] Resuming ${model.id} from byte $startByte');
       }
     }
 
@@ -129,9 +129,8 @@ class DownloadService {
           }
 
           // total may be -1 on chunked transfer — fall back to model size
-          final knownTotal = total > 0
-              ? total
-              : (model.sizeGb * 1024 * 1024 * 1024).toInt();
+          final knownTotal =
+              total > 0 ? total : (model.sizeGb * 1024 * 1024 * 1024).toInt();
 
           final actualReceived = startByte + received;
           final actualTotal = startByte + knownTotal;
@@ -139,7 +138,8 @@ class DownloadService {
 
           int eta = 0;
           if (speed > 0) {
-            eta = ((actualTotal - actualReceived) / (speed * 1024 * 1024)).round();
+            eta = ((actualTotal - actualReceived) / (speed * 1024 * 1024))
+                .round();
           }
 
           onProgress(DownloadProgress(
@@ -155,7 +155,7 @@ class DownloadService {
 
       if (startByte > 0 && response.statusCode == 200) {
         await tmpFile.delete();
-        debugPrint('[Download] Server ignored Range; restarting ${model.name}');
+        AppLog.debug('[Download] Server ignored Range; restarting ${model.id}');
         return downloadModel(
           model: model,
           onProgress: onProgress,
@@ -167,9 +167,8 @@ class DownloadService {
       if (!await _looksLikeGguf(tmpFile)) {
         final reason = await _invalidDownloadReason(tmpFile, response);
         if (await tmpFile.exists()) await tmpFile.delete();
-        final msg =
-            'Downloaded file is not a GGUF model. $reason';
-        debugPrint('[Download] Error: $msg');
+        final msg = 'Downloaded file is not a GGUF model. $reason';
+        AppLog.debug('[Download] Error: $msg');
         onError(msg);
         return '';
       }
@@ -179,10 +178,9 @@ class DownloadService {
       _tokens.remove(model.id);
       _paused.remove(model.id);
 
-      debugPrint('[Download] Complete: $finalPath');
+      AppLog.debug('[Download] Complete: ${model.id}');
       onComplete(finalPath);
       return finalPath;
-
     } on DioException catch (e) {
       if (CancelToken.isCancel(e)) {
         // Paused — keep temp file for resume
@@ -192,12 +190,12 @@ class DownloadService {
         return '';
       }
       final msg = _friendlyError(e);
-      debugPrint('[Download] Error: $msg');
+      AppLog.error('[Download] Error', msg);
       onError(msg);
       return '';
     } catch (e) {
-      debugPrint('[Download] Unexpected: $e');
-      onError(e.toString());
+      AppLog.error('[Download] Unexpected', e);
+      onError('Download failed unexpectedly. Please try again.');
       return '';
     }
   }
@@ -215,7 +213,8 @@ class DownloadService {
     _paused.remove(modelId);
   }
 
-  Future<void> resumeDownload(AiModel model, {
+  Future<void> resumeDownload(
+    AiModel model, {
     required void Function(DownloadProgress) onProgress,
     required void Function(String) onComplete,
     required void Function(String) onError,
@@ -250,7 +249,9 @@ class DownloadService {
         if (code == 401 || code == 403) {
           return 'Access denied (HTTP $code). This model may require a HuggingFace account.';
         }
-        if (code == 404) return 'Model file not found (HTTP 404). URL may have changed.';
+        if (code == 404) {
+          return 'Model file not found (HTTP 404). URL may have changed.';
+        }
         return 'Server error (HTTP $code).';
       default:
         return e.message ?? 'Download failed';

@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_llama/flutter_llama.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/utils/app_log.dart';
 import '../features/chat/domain/entities/chat_message.dart';
 import '../features/models/domain/entities/ai_model.dart';
 
@@ -25,11 +25,11 @@ class InferenceService {
     if (model.localPath == null) return false;
     final modelFile = File(model.localPath!);
     if (!await modelFile.exists()) {
-      debugPrint('[Inference] Load failed: file not found ${model.localPath}');
+      AppLog.debug('[Inference] Load failed: file not found for ${model.id}');
       return false;
     }
     if (!await _looksLikeGguf(modelFile)) {
-      debugPrint('[Inference] Load failed: invalid GGUF file ${model.localPath}');
+      AppLog.debug('[Inference] Load failed: invalid GGUF file ${model.id}');
       return false;
     }
 
@@ -48,10 +48,10 @@ class InferenceService {
         return false;
       }
       _loadedModel = model;
-      debugPrint('[Inference] Loaded: ${model.name}');
+      AppLog.debug('[Inference] Loaded: ${model.id}');
       return true;
-    } catch (e) {
-      debugPrint('[Inference] Load failed: $e');
+    } catch (e, stackTrace) {
+      AppLog.error('[Inference] Load failed for ${model.id}', e, stackTrace);
       _loadedModel = null;
       return false;
     } finally {
@@ -76,21 +76,34 @@ class InferenceService {
       systemPrompt: systemPrompt,
       model: _loadedModel!,
     );
-    debugPrint('[Inference] Prompt tail: ${prompt.length > 300 ? prompt.substring(prompt.length - 300) : prompt}');
-
-    final response = await _llama.generate(
-      GenerationParams(
-        prompt: prompt,
-        maxTokens: maxTokens,
-        temperature: temperature <= 0 ? 0.8 : temperature,
-        topP: 0.95,
-        topK: 50,
-        repeatPenalty: 1.1,
-        stopSequences: _stopSequencesFor(_loadedModel!),
-      ),
+    var cleaned = await _generateText(
+      prompt: prompt,
+      model: _loadedModel!,
+      temperature: temperature,
+      maxTokens: maxTokens,
     );
 
-    final cleaned = _cleanResponse(response.text, _loadedModel!);
+    if (cleaned.trim().isEmpty) {
+      AppLog.debug('[Inference] Empty response. Retrying with simple prompt.');
+      cleaned = await _generateText(
+        prompt: _buildSimplePrompt(
+          history: history,
+          userMessage: userMessage,
+          systemPrompt: systemPrompt,
+        ),
+        model: _loadedModel!,
+        temperature: 0.8,
+        maxTokens: maxTokens,
+        useStopSequences: false,
+      );
+    }
+
+    if (cleaned.trim().isEmpty) {
+      throw Exception(
+        'The model returned no text. Try a smaller compatible GGUF model such as Qwen2.5 0.5B or Llama 3.2 1B.',
+      );
+    }
+
     for (final codePoint in cleaned.runes) {
       yield String.fromCharCode(codePoint);
       await Future<void>.delayed(const Duration(milliseconds: 8));
@@ -104,7 +117,7 @@ class InferenceService {
   Future<void> unloadModel() async {
     await _llama.unloadModel();
     _loadedModel = null;
-    debugPrint('[Inference] Model unloaded');
+    AppLog.debug('[Inference] Model unloaded');
   }
 
   Future<Object?> getGpuInfo() async {
@@ -120,6 +133,13 @@ class InferenceService {
     final id = model.id.toLowerCase();
     if (id.contains('llama')) {
       return _buildLlamaPrompt(
+        history: history,
+        userMessage: userMessage,
+        systemPrompt: systemPrompt,
+      );
+    }
+    if (id.contains('gemma')) {
+      return _buildGemmaPrompt(
         history: history,
         userMessage: userMessage,
         systemPrompt: systemPrompt,
@@ -167,7 +187,8 @@ class InferenceService {
     final system = systemPrompt?.trim();
     if (system != null && system.isNotEmpty) {
       buffer
-        ..write('<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n')
+        ..write(
+            '<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n')
         ..write(system)
         ..write('<|eot_id|>');
     } else {
@@ -187,6 +208,36 @@ class InferenceService {
       ..write('<|start_header_id|>user<|end_header_id|>\n\n')
       ..write(userMessage.trim())
       ..write('<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n');
+    return buffer.toString();
+  }
+
+  String _buildGemmaPrompt({
+    required List<ChatMessage> history,
+    required String userMessage,
+    String? systemPrompt,
+  }) {
+    final buffer = StringBuffer();
+    final system = systemPrompt?.trim();
+    if (system != null && system.isNotEmpty) {
+      buffer
+        ..write('<start_of_turn>user\n')
+        ..write('$system\n\n');
+    }
+    for (final message in history.where(
+      (m) => !m.isStreaming && m.content.trim().isNotEmpty,
+    )) {
+      final role = message.role == MessageRole.assistant ? 'model' : 'user';
+      buffer
+        ..write('<start_of_turn>')
+        ..write(role)
+        ..write('\n')
+        ..write(message.content.trim())
+        ..write('<end_of_turn>\n');
+    }
+    buffer
+      ..write('<start_of_turn>user\n')
+      ..write(userMessage.trim())
+      ..write('<end_of_turn>\n<start_of_turn>model\n');
     return buffer.toString();
   }
 
@@ -210,6 +261,28 @@ class InferenceService {
       }
     }
     buffer.write('[INST] ${userMessage.trim()} [/INST]\n');
+    return buffer.toString();
+  }
+
+  String _buildSimplePrompt({
+    required List<ChatMessage> history,
+    required String userMessage,
+    String? systemPrompt,
+  }) {
+    final buffer = StringBuffer();
+    final system = systemPrompt?.trim();
+    if (system != null && system.isNotEmpty) {
+      buffer.writeln('System: $system');
+    }
+    for (final message in history.where(
+      (m) => !m.isStreaming && m.content.trim().isNotEmpty,
+    )) {
+      final role = message.role == MessageRole.assistant ? 'Assistant' : 'User';
+      buffer.writeln('$role: ${message.content.trim()}');
+    }
+    buffer
+      ..writeln('User: ${userMessage.trim()}')
+      ..write('Assistant:');
     return buffer.toString();
   }
 
@@ -238,6 +311,9 @@ class InferenceService {
     if (id.contains('llama')) {
       return const ['<|eot_id|>', '<|end_of_text|>'];
     }
+    if (id.contains('gemma')) {
+      return const ['<end_of_turn>'];
+    }
     if (id.contains('mistral')) {
       return const ['</s>'];
     }
@@ -252,7 +328,39 @@ class InferenceService {
         cleaned = cleaned.substring(0, index);
       }
     }
+    cleaned = cleaned
+        .replaceFirst(RegExp(r'^\s*Assistant:\s*', caseSensitive: false), '')
+        .replaceFirst(RegExp(r'^\s*assistant\s*', caseSensitive: false), '')
+        .replaceFirst(RegExp(r'^\s*<\|im_start\|>assistant\s*'), '')
+        .replaceFirst(RegExp(r'^\s*<start_of_turn>model\s*'), '')
+        .replaceFirst(
+            RegExp(r'^\s*<\|start_header_id\|>assistant<\|end_header_id\|>\s*'),
+            '');
     return cleaned.trimLeft();
+  }
+
+  Future<String> _generateText({
+    required String prompt,
+    required AiModel model,
+    required double temperature,
+    required int maxTokens,
+    bool useStopSequences = true,
+  }) async {
+    final response = await _llama.generate(
+      GenerationParams(
+        prompt: prompt,
+        maxTokens: maxTokens,
+        temperature: temperature <= 0 ? 0.8 : temperature,
+        topP: 0.95,
+        topK: 50,
+        repeatPenalty: 1.1,
+        stopSequences: useStopSequences ? _stopSequencesFor(model) : const [],
+      ),
+    );
+    AppLog.debug(
+      '[Inference] Raw response length=${response.text.length}, tokens=${response.tokensGenerated}',
+    );
+    return _cleanResponse(response.text, model);
   }
 
   Future<bool> _looksLikeGguf(File file) async {

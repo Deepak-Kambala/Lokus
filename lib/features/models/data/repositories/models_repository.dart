@@ -52,6 +52,13 @@ class ModelsRepository {
       }
     }
 
+    models = models
+        .where((m) =>
+            m.status != ModelStatus.downloaded ||
+            m.localPath == null ||
+            !_isUsableGguf(m.localPath!))
+        .toList();
+
     if (query != null && query.isNotEmpty) {
       final q = query.toLowerCase();
       models = models

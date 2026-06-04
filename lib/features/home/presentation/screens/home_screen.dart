@@ -8,6 +8,7 @@ import '../../../models/providers/models_provider.dart';
 import '../../../models/domain/entities/ai_model.dart';
 import '../../widgets/conversation_drawer.dart';
 import '../../widgets/model_selector_button.dart';
+import '../../widgets/new_chat_button.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -55,18 +56,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: AppTheme.background,
+      toolbarHeight: 62,
       leading: IconButton(
         icon: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary),
         onPressed: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       title: const ModelSelectorButton(),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.edit_outlined, color: AppTheme.textSecondary),
-          tooltip: 'New Chat',
-          onPressed: _startNewChat,
-        ),
-        const SizedBox(width: 8),
+        NewChatButton(onPressed: _startNewChat),
+        const SizedBox(width: 12),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
@@ -82,9 +80,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _WelcomeHeader(),
-          const SizedBox(height: 32),
-          _WhatsNewCard(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
           _QuickStartGrid(onTap: _startWithPrompt),
         ],
       ),
@@ -255,11 +251,13 @@ class _WelcomeHeader extends StatelessWidget {
                 fontWeight: FontWeight.w400,
               ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
           'How can I help today?',
           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                letterSpacing: -0.5,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
               ),
         ),
       ],
@@ -274,120 +272,16 @@ class _WelcomeHeader extends StatelessWidget {
   }
 }
 
-class _WhatsNewCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.accentSurface,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppTheme.accentDim),
-                ),
-                child: const Text(
-                  "WHAT'S NEW",
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.accentLight,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _NewsItem(
-            icon: Icons.tune_rounded,
-            title: 'Reusable system prompts',
-            sub: 'Save and reuse custom system prompts across chats',
-          ),
-          const SizedBox(height: 12),
-          _NewsItem(
-            icon: Icons.language_rounded,
-            title: 'Available in 28 languages',
-            sub: 'Full UI localization now available',
-          ),
-          const SizedBox(height: 12),
-          _NewsItem(
-            icon: Icons.speed_rounded,
-            title: 'Performance improvements',
-            sub: 'Faster model loading and token generation',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NewsItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String sub;
-
-  const _NewsItem({required this.icon, required this.title, required this.sub});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceHighlight,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 15, color: AppTheme.accent),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                sub,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _QuickStartGrid extends StatelessWidget {
   final Function(String) onTap;
   const _QuickStartGrid({required this.onTap});
 
   static const _prompts = [
-    ('Summarize a topic', Icons.article_outlined, 'Summarize the key concepts of '),
+    (
+      'Summarize a topic',
+      Icons.article_outlined,
+      'Summarize the key concepts of '
+    ),
     ('Write code', Icons.code_rounded, 'Write a function that '),
     ('Explain something', Icons.lightbulb_outline_rounded, 'Explain how '),
     ('Brainstorm ideas', Icons.auto_awesome_outlined, 'Give me 10 ideas for '),
@@ -419,7 +313,8 @@ class _QuickStartGrid extends StatelessWidget {
             return GestureDetector(
               onTap: () => onTap(p.$3),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppTheme.surface,
                   borderRadius: BorderRadius.circular(12),

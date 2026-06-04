@@ -5,6 +5,7 @@ import '../../data/repositories/models_repository.dart';
 import '../../providers/models_provider.dart';
 import '../../../../services/storage_service.dart';
 import '../../../../shared/theme/app_theme.dart';
+import 'model_logo.dart';
 import 'package:intl/intl.dart';
 
 class BrowseModelCard extends ConsumerWidget {
@@ -23,101 +24,79 @@ class BrowseModelCard extends ConsumerWidget {
     final status = statuses[model.id] ?? latestModel.status;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Provider icon
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceElevated,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Center(
-              child: Text(
-                model.providerIcon,
-                style: const TextStyle(fontSize: 20),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ModelLogo(value: model.providerIcon, size: 42),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              model.name,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${model.provider} · ${model.categoryLabel} · ${model.sizeString}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                                height: 1.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Released ${DateFormat('MMM yyyy').format(model.releaseDate)}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textTertiary,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _ActionButton(
+                        model: latestModel,
+                        status: status,
+                      ),
+                    ],
+                  ),
+                  // Download progress bar
+                  if (status == ModelStatus.downloading ||
+                      status == ModelStatus.paused)
+                    _DownloadProgress(model: latestModel),
+                  if (status == ModelStatus.failed)
+                    _DownloadError(message: errors[model.id]),
+                ],
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            model.name,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Text(
-                                model.provider,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              _CategoryBadge(label: model.categoryLabel),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    _ActionButton(
-                      model: latestModel,
-                      status: status,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  model.description,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                    height: 1.4,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _MetaChip(label: model.sizeString),
-                    const SizedBox(width: 6),
-                    _MetaChip(label: model.parameterString),
-                    const SizedBox(width: 6),
-                    _MetaChip(
-                      label: DateFormat('MMM yyyy').format(model.releaseDate),
-                    ),
-                  ],
-                ),
-                // Download progress bar
-                if (status == ModelStatus.downloading ||
-                    status == ModelStatus.paused)
-                  _DownloadProgress(model: latestModel),
-                if (status == ModelStatus.failed)
-                  _DownloadError(message: errors[model.id]),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -159,7 +138,8 @@ class _ActionButton extends ConsumerWidget {
       icon: Icons.pause_rounded,
       color: AppTheme.warning,
       tooltip: 'Pause',
-      onTap: () => ref.read(modelManagerProvider.notifier).pauseDownload(model.id),
+      onTap: () =>
+          ref.read(modelManagerProvider.notifier).pauseDownload(model.id),
     );
   }
 
@@ -168,7 +148,8 @@ class _ActionButton extends ConsumerWidget {
       icon: Icons.play_arrow_rounded,
       color: AppTheme.accent,
       tooltip: 'Resume',
-      onTap: () => ref.read(modelManagerProvider.notifier).resumeDownload(model.id),
+      onTap: () =>
+          ref.read(modelManagerProvider.notifier).resumeDownload(model.id),
     );
   }
 
@@ -236,11 +217,11 @@ class _IconActionBtn extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 34,
-          height: 34,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             color: color.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: color.withOpacity(0.3)),
           ),
           child: Icon(icon, size: 16, color: color),
@@ -357,57 +338,6 @@ class _DownloadError extends StatelessWidget {
           fontSize: 11,
           height: 1.35,
           color: AppTheme.error,
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryBadge extends StatelessWidget {
-  final String label;
-  const _CategoryBadge({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceHighlight,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.textSecondary,
-          letterSpacing: 0.3,
-        ),
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  final String label;
-  const _MetaChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 10,
-          color: AppTheme.textSecondary,
-          fontFamily: 'monospace',
         ),
       ),
     );

@@ -1,251 +1,259 @@
 import '../../domain/entities/ai_model.dart';
 
-/// All download URLs point to public HuggingFace GGUF repos.
-/// Format: https://huggingface.co/<owner>/<repo>/resolve/main/<filename>
-/// The Dio download service follows the CDN redirect automatically.
+/// Curated GGUF models for on-device chat.
 ///
-/// Recommended starter model for testing: SmolLM2 1.7B (1 GB, fast on CPU).
+/// Listed newest first by upstream model release where possible. Download URLs
+/// point directly to Hugging Face `resolve/main/*.gguf` files.
 class MockModelData {
   static List<AiModel> getBrowsableModels() {
     return [
-      // ── SmolLM2 1.7B ── best for first test (tiny, fast) ─────────────────
       AiModel(
-        id: 'smollm2-1.7b-instruct',
-        name: 'SmolLM2 1.7B Instruct',
-        provider: 'HuggingFace',
-        description:
-            'Ultra-compact model designed for on-device deployment with minimal memory. Best choice for first-time testing.',
-        sizeGb: 1.03,
-        downloadUrl:
-            'https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF'
-            '/resolve/main/smollm2-1.7b-instruct-q4_k_m.gguf',
-        category: ModelCategory.chat,
-        version: '2.0',
-        releaseDate: DateTime(2024, 11, 5),
+        id: 'gpt-oss-20b',
+        name: 'gpt-oss-20b',
+        provider: 'OpenAI',
+        description: 'Open-weight reasoning model for high-memory devices.',
+        sizeGb: 11.60,
+        downloadUrl: 'https://huggingface.co/unsloth/gpt-oss-20b-GGUF'
+            '/resolve/main/gpt-oss-20b-Q4_K_M.gguf',
+        category: ModelCategory.reasoning,
+        version: '20B',
+        releaseDate: DateTime(2025, 8, 5),
+        parameterCount: 210,
+        providerIcon: 'assets/icons/chatgpt.png',
+        contextLength: 32768,
+        tags: ['openai', 'gpt-oss', 'reasoning', 'q4_k_m'],
+      ),
+      AiModel(
+        id: 'qwen3-4b',
+        name: 'Qwen3-4B',
+        provider: 'Qwen',
+        description: 'Qwen3 dense language model quantized for local chat.',
+        sizeGb: 2.60,
+        downloadUrl: 'https://huggingface.co/QuantFactory/Qwen3-4B-GGUF'
+            '/resolve/main/Qwen3-4B.Q4_K_M.gguf',
+        category: ModelCategory.reasoning,
+        version: '3',
+        releaseDate: DateTime(2025, 4, 29),
+        parameterCount: 40,
+        providerIcon: 'assets/icons/qwen.png',
+        contextLength: 32768,
+        tags: ['qwen3', 'reasoning', 'multilingual', 'q4_k_m'],
+      ),
+      AiModel(
+        id: 'qwen3-1.7b',
+        name: 'Qwen3-1.7B',
+        provider: 'Qwen',
+        description: 'Small Qwen3 model for faster local responses.',
+        sizeGb: 1.11,
+        downloadUrl: 'https://huggingface.co/QuantFactory/Qwen3-1.7B-GGUF'
+            '/resolve/main/Qwen3-1.7B.Q4_K_M.gguf',
+        category: ModelCategory.reasoning,
+        version: '3',
+        releaseDate: DateTime(2025, 4, 29),
         parameterCount: 17,
-        providerIcon: '🤗',
-        contextLength: 8192,
-        tags: ['ultra-compact', 'on-device', 'fast', 'recommended'],
+        providerIcon: 'assets/icons/qwen.png',
+        contextLength: 32768,
+        tags: ['qwen3', 'lightweight', 'multilingual', 'q4_k_m'],
       ),
-
-      // ── Phi-3.5 Mini 3.8B ─────────────────────────────────────────────────
       AiModel(
-        id: 'phi-3.5-mini-instruct',
-        name: 'Phi-3.5 Mini Instruct',
-        provider: 'Microsoft',
-        description:
-            'Microsoft\'s 3.8B model optimised for speed and efficiency. Excellent reasoning in a small package.',
-        sizeGb: 2.37,
+        id: 'qwen3-0.6b',
+        name: 'Qwen3-0.6B',
+        provider: 'Qwen',
+        description: 'Very small Qwen3 model for low-memory Android devices.',
+        sizeGb: 0.48,
+        downloadUrl: 'https://huggingface.co/QuantFactory/Qwen3-0.6B-GGUF'
+            '/resolve/main/Qwen3-0.6B.Q4_K_M.gguf',
+        category: ModelCategory.chat,
+        version: '3',
+        releaseDate: DateTime(2025, 4, 29),
+        parameterCount: 6,
+        providerIcon: 'assets/icons/qwen.png',
+        contextLength: 32768,
+        tags: ['qwen3', 'lightweight', 'starter', 'q4_k_m'],
+      ),
+      AiModel(
+        id: 'granite-3.3-2b-instruct',
+        name: 'granite-3.3-2b-instruct',
+        provider: 'IBM',
+        description: 'IBM Granite instruct model for compact local chat.',
+        sizeGb: 1.40,
         downloadUrl:
-            'https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF'
-            '/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf',
+            'https://huggingface.co/ibm-granite/granite-3.3-2b-instruct-GGUF'
+            '/resolve/main/granite-3.3-2b-instruct-Q4_K_M.gguf',
         category: ModelCategory.instruct,
-        version: '3.5',
-        releaseDate: DateTime(2024, 8, 20),
-        parameterCount: 38,
-        providerIcon: '🪟',
-        contextLength: 131072,
-        tags: ['fast', 'efficient', 'mobile'],
+        version: '3.3',
+        releaseDate: DateTime(2025, 4, 16),
+        parameterCount: 20,
+        providerIcon: 'assets/icons/ibm.png',
+        contextLength: 32768,
+        tags: ['lightweight', 'business', 'granite', 'q4_k_m'],
       ),
-
-      // ── Gemma 3 4B ────────────────────────────────────────────────────────
       AiModel(
-        id: 'gemma-3-4b-instruct',
-        name: 'Gemma 3 4B Instruct',
+        id: 'gemma-3-4b-it',
+        name: 'gemma-3-4b-it',
         provider: 'Google',
-        description:
-            'Lightweight multilingual model with strong reasoning and instruction-following capabilities.',
-        sizeGb: 2.51,
-        downloadUrl:
-            'https://huggingface.co/bartowski/gemma-3-4b-it-GGUF'
+        description: 'Gemma 3 instruction-tuned model quantized as GGUF.',
+        sizeGb: 2.49,
+        downloadUrl: 'https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF'
             '/resolve/main/gemma-3-4b-it-Q4_K_M.gguf',
         category: ModelCategory.instruct,
-        version: '3.0',
+        version: '3',
         releaseDate: DateTime(2025, 3, 12),
         parameterCount: 40,
-        providerIcon: '🔷',
-        contextLength: 8192,
-        tags: ['multilingual', 'instruct', 'lightweight'],
+        providerIcon: 'assets/icons/google.png',
+        contextLength: 32768,
+        tags: ['gemma', 'google', 'instruct', 'q4_k_m'],
       ),
-
-      // ── Phi-4 Mini 3.8B ───────────────────────────────────────────────────
+      AiModel(
+        id: 'gemma-3-1b-it',
+        name: 'gemma-3-1b-it',
+        provider: 'Google',
+        description: 'Compact Gemma 3 instruction model for mobile chat.',
+        sizeGb: 0.70,
+        downloadUrl: 'https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF'
+            '/resolve/main/gemma-3-1b-it-Q4_K_M.gguf',
+        category: ModelCategory.instruct,
+        version: '3',
+        releaseDate: DateTime(2025, 3, 12),
+        parameterCount: 10,
+        providerIcon: 'assets/icons/google.png',
+        contextLength: 32768,
+        tags: ['gemma', 'lightweight', 'instruct', 'q4_k_m'],
+      ),
       AiModel(
         id: 'phi-4-mini-instruct',
-        name: 'Phi-4 Mini Instruct',
+        name: 'Phi-4-mini-instruct',
         provider: 'Microsoft',
-        description:
-            'Microsoft\'s compact powerhouse with exceptional math and science capabilities.',
-        sizeGb: 2.49,
+        description: 'Microsoft Phi-4 mini instruction model in GGUF format.',
+        sizeGb: 2.50,
         downloadUrl:
-            'https://huggingface.co/bartowski/Phi-4-mini-instruct-GGUF'
-            '/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf',
+            'https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF'
+            '/resolve/main/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf',
         category: ModelCategory.reasoning,
-        version: '4.0-mini',
-        releaseDate: DateTime(2025, 2, 5),
+        version: '4',
+        releaseDate: DateTime(2025, 2, 26),
         parameterCount: 38,
-        providerIcon: '🪟',
-        contextLength: 16384,
-        tags: ['math', 'science', 'compact'],
+        providerIcon: 'assets/icons/microsoft.png',
+        contextLength: 32768,
+        tags: ['phi', 'reasoning', 'microsoft', 'q4_k_m'],
       ),
-
-      // ── Llama 3.2 3B ──────────────────────────────────────────────────────
       AiModel(
         id: 'llama-3.2-3b-instruct',
-        name: 'Llama 3.2 3B Instruct',
+        name: 'Llama-3.2-3B-Instruct',
         provider: 'Meta',
-        description:
-            'Meta\'s small but capable instruction-tuned model, ideal for edge devices.',
+        description: 'Meta Llama 3.2 instruct model quantized by bartowski.',
         sizeGb: 2.02,
         downloadUrl:
             'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF'
             '/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
-        category: ModelCategory.instruct,
+        category: ModelCategory.chat,
         version: '3.2',
         releaseDate: DateTime(2024, 9, 25),
         parameterCount: 30,
-        providerIcon: '🦙',
-        contextLength: 131072,
-        tags: ['edge', 'instruct', 'fast'],
+        providerIcon: 'assets/icons/meta.png',
+        contextLength: 32768,
+        tags: ['llama', 'meta', 'chat', 'q4_k_m'],
       ),
-
-      // ── Qwen2.5 7B ────────────────────────────────────────────────────────
+      AiModel(
+        id: 'llama-3.2-1b-instruct',
+        name: 'Llama-3.2-1B-Instruct',
+        provider: 'Meta',
+        description: 'Small Meta Llama 3.2 instruct model for local chat.',
+        sizeGb: 0.78,
+        downloadUrl:
+            'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF'
+            '/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
+        category: ModelCategory.chat,
+        version: '3.2',
+        releaseDate: DateTime(2024, 9, 25),
+        parameterCount: 10,
+        providerIcon: 'assets/icons/meta.png',
+        contextLength: 32768,
+        tags: ['llama', 'lightweight', 'chat', 'q4_k_m'],
+      ),
       AiModel(
         id: 'qwen2.5-7b-instruct',
-        name: 'Qwen2.5 7B Instruct',
-        provider: 'Alibaba',
+        name: 'Qwen2.5-7B-Instruct',
+        provider: 'Qwen',
         description:
-            'Alibaba\'s high-performance instruction model with excellent multilingual support.',
+            'Qwen2.5 instruction model for coding and multilingual chat.',
         sizeGb: 4.68,
-        downloadUrl:
-            'https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF'
+        downloadUrl: 'https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF'
             '/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf',
-        category: ModelCategory.instruct,
-        version: '2.5',
-        releaseDate: DateTime(2024, 9, 18),
-        parameterCount: 70,
-        providerIcon: '🌐',
-        contextLength: 131072,
-        tags: ['multilingual', 'coding', 'math'],
-      ),
-
-      // ── Qwen2.5 Coder 7B ──────────────────────────────────────────────────
-      AiModel(
-        id: 'qwen2.5-coder-7b',
-        name: 'Qwen2.5 Coder 7B',
-        provider: 'Alibaba',
-        description:
-            'Specialised coding model with support for 40+ programming languages.',
-        sizeGb: 4.68,
-        downloadUrl:
-            'https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF'
-            '/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf',
         category: ModelCategory.coding,
         version: '2.5',
-        releaseDate: DateTime(2024, 11, 12),
+        releaseDate: DateTime(2024, 9, 19),
         parameterCount: 70,
-        providerIcon: '🌐',
-        contextLength: 131072,
-        tags: ['coding', 'completion', 'debug'],
+        providerIcon: 'assets/icons/qwen.png',
+        contextLength: 32768,
+        tags: ['coding', 'math', 'multilingual', 'q4_k_m'],
       ),
-
-      // ── Llama 3.1 8B ──────────────────────────────────────────────────────
       AiModel(
-        id: 'llama-3.1-8b-instruct',
-        name: 'Llama 3.1 8B Instruct',
-        provider: 'Meta',
-        description:
-            'Balanced model with strong general performance across tasks.',
-        sizeGb: 4.92,
-        downloadUrl:
-            'https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF'
-            '/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf',
-        category: ModelCategory.instruct,
-        version: '3.1',
-        releaseDate: DateTime(2024, 7, 23),
-        parameterCount: 80,
-        providerIcon: '🦙',
-        contextLength: 131072,
-        tags: ['general', 'instruct', 'balanced'],
+        id: 'qwen2.5-0.5b-instruct',
+        name: 'Qwen2.5-0.5B-Instruct',
+        provider: 'Qwen',
+        description: 'Very small Qwen2.5 instruction model for quick testing.',
+        sizeGb: 0.39,
+        downloadUrl: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF'
+            '/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
+        category: ModelCategory.chat,
+        version: '2.5',
+        releaseDate: DateTime(2024, 9, 19),
+        parameterCount: 5,
+        providerIcon: 'assets/icons/qwen.png',
+        contextLength: 32768,
+        tags: ['lightweight', 'multilingual', 'starter', 'q4_k_m'],
       ),
-
-      // ── Mistral 7B ────────────────────────────────────────────────────────
+      AiModel(
+        id: 'phi-3.5-mini-instruct',
+        name: 'Phi-3.5-mini-instruct',
+        provider: 'Microsoft',
+        description: 'Small Phi reasoning model for local assistant use.',
+        sizeGb: 2.20,
+        downloadUrl:
+            'https://huggingface.co/QuantFactory/Phi-3.5-mini-instruct-GGUF'
+            '/resolve/main/Phi-3.5-mini-instruct.Q4_K_M.gguf',
+        category: ModelCategory.reasoning,
+        version: '3.5',
+        releaseDate: DateTime(2024, 8, 20),
+        parameterCount: 38,
+        providerIcon: 'assets/icons/microsoft.png',
+        contextLength: 32768,
+        tags: ['reasoning', 'coding', 'phi', 'q4_k_m'],
+      ),
+      AiModel(
+        id: 'mistral-nemo-instruct-2407',
+        name: 'Mistral-Nemo-Instruct-2407',
+        provider: 'Mistral AI',
+        description: 'Mistral Nemo instruct model in GGUF format.',
+        sizeGb: 7.48,
+        downloadUrl:
+            'https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF'
+            '/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf',
+        category: ModelCategory.instruct,
+        version: '2407',
+        releaseDate: DateTime(2024, 7, 18),
+        parameterCount: 120,
+        providerIcon: 'assets/icons/mistral.png',
+        contextLength: 128000,
+        tags: ['mistral', 'nemo', 'instruct', 'q4_k_m'],
+      ),
       AiModel(
         id: 'mistral-7b-instruct-v0.3',
-        name: 'Mistral 7B Instruct v0.3',
+        name: 'Mistral-7B-Instruct-v0.3',
         provider: 'Mistral AI',
-        description:
-            'Mistral\'s flagship 7B model with function calling and sliding window attention.',
+        description: 'General-purpose Mistral instruction model.',
         sizeGb: 4.37,
         downloadUrl:
-            'https://huggingface.co/MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF'
-            '/resolve/main/Mistral-7B-Instruct-v0.3.Q4_K_M.gguf',
+            'https://huggingface.co/macandchiz/Mistral-7B-Instruct-v0.3-GGUF'
+            '/resolve/main/mistral-7b-instruct-v0.3-q4_k_m.gguf',
         category: ModelCategory.instruct,
         version: '0.3',
         releaseDate: DateTime(2024, 5, 22),
         parameterCount: 70,
-        providerIcon: '💨',
+        providerIcon: 'assets/icons/mistral.png',
         contextLength: 32768,
-        tags: ['function-calling', 'general', 'efficient'],
-      ),
-
-      // ── DeepSeek R1 7B ────────────────────────────────────────────────────
-      AiModel(
-        id: 'deepseek-r1-7b',
-        name: 'DeepSeek R1 7B',
-        provider: 'DeepSeek',
-        description:
-            'Open-source reasoning model with chain-of-thought capabilities comparable to o1.',
-        sizeGb: 4.68,
-        downloadUrl:
-            'https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF'
-            '/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf',
-        category: ModelCategory.reasoning,
-        version: 'R1',
-        releaseDate: DateTime(2025, 1, 20),
-        parameterCount: 70,
-        providerIcon: '🌊',
-        contextLength: 131072,
-        tags: ['reasoning', 'chain-of-thought', 'math'],
-      ),
-
-      // ── Gemma 3 12B ───────────────────────────────────────────────────────
-      AiModel(
-        id: 'gemma-3-12b-instruct',
-        name: 'Gemma 3 12B Instruct',
-        provider: 'Google',
-        description:
-            'Mid-size Google model with excellent coding and long-context reasoning.',
-        sizeGb: 7.34,
-        downloadUrl:
-            'https://huggingface.co/bartowski/gemma-3-12b-it-GGUF'
-            '/resolve/main/gemma-3-12b-it-Q4_K_M.gguf',
-        category: ModelCategory.instruct,
-        version: '3.0',
-        releaseDate: DateTime(2025, 3, 12),
-        parameterCount: 120,
-        providerIcon: '🔷',
-        contextLength: 131072,
-        tags: ['coding', 'reasoning', 'long-context'],
-      ),
-
-      // ── Nemotron Mini 4B ──────────────────────────────────────────────────
-      AiModel(
-        id: 'nemotron-mini-4b',
-        name: 'Nemotron Mini 4B',
-        provider: 'NVIDIA',
-        description:
-            'Hybrid reasoning model by NVIDIA, excelling at complex analytical tasks.',
-        sizeGb: 2.84,
-        downloadUrl:
-            'https://huggingface.co/bartowski/Nemotron-Mini-4B-Instruct-GGUF'
-            '/resolve/main/Nemotron-Mini-4B-Instruct-Q4_K_M.gguf',
-        category: ModelCategory.reasoning,
-        version: '3.0-nano',
-        releaseDate: DateTime(2024, 10, 15),
-        parameterCount: 40,
-        providerIcon: '⚡',
-        contextLength: 4096,
-        tags: ['reasoning', 'hybrid', 'nvidia'],
+        tags: ['general', 'mistral', 'instruct', 'q4_k_m'],
       ),
     ];
   }

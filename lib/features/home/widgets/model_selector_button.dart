@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/providers/models_provider.dart';
+import '../../models/presentation/widgets/model_logo.dart';
 import '../../../shared/theme/app_theme.dart';
 
 class ModelSelectorButton extends ConsumerWidget {
@@ -10,45 +11,63 @@ class ModelSelectorButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeModel = ref.watch(activeModelProvider);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final maxLabelWidth = (screenWidth - 190).clamp(96.0, 220.0);
 
     return GestureDetector(
       onTap: () => context.push('/models'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (activeModel != null) ...[
-              Text(activeModel.providerIcon, style: const TextStyle(fontSize: 13)),
-              const SizedBox(width: 6),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 160),
-                child: Text(
-                  activeModel.name,
-                  style: const TextStyle(
+      child: Tooltip(
+        message: activeModel?.name ?? 'Select Model',
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.only(left: 8, right: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (activeModel != null) ...[
+                ModelLogo(value: activeModel.providerIcon, size: 24),
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxLabelWidth),
+                  child: Text(
+                    activeModel.name,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ] else ...[
+                const Icon(
+                  Icons.memory_rounded,
+                  size: 17,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Select Model',
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textSecondary,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ] else ...[
-              const Icon(Icons.smart_toy_outlined, size: 14, color: AppTheme.textSecondary),
-              const SizedBox(width: 6),
-              const Text(
-                'Select Model',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.textSecondary),
+              ],
+              const SizedBox(width: 5),
+              const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 17,
+                color: AppTheme.textSecondary,
               ),
             ],
-            const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: AppTheme.textSecondary),
-          ],
+          ),
         ),
       ),
     );
