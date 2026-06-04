@@ -38,9 +38,9 @@ class InferenceService {
       final ok = await _llama.loadModel(
         LlamaConfig(
           modelPath: model.localPath!,
-          nThreads: 4,
+          nThreads: 2,
           nGpuLayers: 0,
-          contextSize: 2048,
+          contextSize: 1024,
         ),
       );
       if (!ok) {
@@ -63,7 +63,7 @@ class InferenceService {
     required List<ChatMessage> history,
     required String userMessage,
     double temperature = 0.7,
-    int maxTokens = 512,
+    int maxTokens = 256,
     String? systemPrompt,
   }) async* {
     if (_loadedModel == null) {
@@ -346,21 +346,33 @@ class InferenceService {
     required int maxTokens,
     bool useStopSequences = true,
   }) async {
-    final response = await _llama.generate(
-      GenerationParams(
-        prompt: prompt,
-        maxTokens: maxTokens,
-        temperature: temperature <= 0 ? 0.8 : temperature,
-        topP: 0.95,
-        topK: 50,
-        repeatPenalty: 1.1,
-        stopSequences: useStopSequences ? _stopSequencesFor(model) : const [],
-      ),
-    );
-    AppLog.debug(
-      '[Inference] Raw response length=${response.text.length}, tokens=${response.tokensGenerated}',
-    );
-    return _cleanResponse(response.text, model);
+    try {
+      final response = await _llama
+          .generate(
+            GenerationParams(
+              prompt: prompt,
+              maxTokens: maxTokens,
+              temperature: temperature <= 0 ? 0.8 : temperature,
+              topP: 0.95,
+              topK: 50,
+              repeatPenalty: 1.1,
+              stopSequences:
+                  useStopSequences ? _stopSequencesFor(model) : const [],
+            ),
+          )
+          .timeout(const Duration(minutes: 2));
+      AppLog.debug(
+        '[Inference] Raw response length=${response.text.length}, tokens=${response.tokensGenerated}',
+      );
+      return _cleanResponse(response.text, model);
+    } on TimeoutException {
+      await stopGeneration();
+      throw Exception('Generation timed out. Try a shorter prompt.');
+    } catch (e, stackTrace) {
+      AppLog.error(
+          '[Inference] Generate failed for ${model.id}', e, stackTrace);
+      throw Exception('Generation failed. Try a smaller model or re-download.');
+    }
   }
 
   Future<bool> _looksLikeGguf(File file) async {

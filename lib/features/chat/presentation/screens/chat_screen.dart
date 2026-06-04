@@ -83,6 +83,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _showSnack('Model not downloaded yet. Download it from Browse Models.');
       return false;
     }
+    if (model.sizeGb > 3.2) {
+      setState(() {
+        _modelLoadError =
+            '${model.name} is too large for stable on-device chat here. Use a lighter model such as Qwen3-0.6B, gemma-3-1b-it, or Llama-3.2-1B-Instruct.';
+      });
+      return false;
+    }
 
     // Already loaded
     if (inference.isModelLoaded && inference.loadedModel?.id == model.id) {
@@ -96,6 +103,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     final ok = await inference.loadModel(model);
 
+    if (!mounted) return false;
     setState(() => _isLoadingModel = false);
 
     if (!ok) {
@@ -214,7 +222,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         await ref
             .read(messagesProvider(widget.conversationId).notifier)
             .updateLastMessage(assistantMsg.copyWith(
-              content: 'Error: $e',
+              content: _friendlyGenerationError(e),
               isStreaming: false,
               isError: true,
             ));
@@ -247,6 +255,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _showSnack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  String _friendlyGenerationError(Object error) {
+    final text = error.toString().replaceFirst('Exception: ', '').trim();
+    if (text.isEmpty) {
+      return 'Generation failed. Try a smaller model or re-download the file.';
+    }
+    return 'Error: $text';
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -288,31 +304,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   PreferredSizeWidget _buildAppBar(Conversation? convo) {
-    final activeModel = ref.watch(activeModelProvider);
     return AppBar(
       backgroundColor: AppTheme.background,
-      toolbarHeight: activeModel == null ? 62 : 70,
+      toolbarHeight: 62,
       leading: IconButton(
         icon: const Icon(Icons.menu_rounded, color: AppTheme.textPrimary),
         onPressed: () => _scaffoldKey.currentState?.openDrawer(),
       ),
-      title: Column(
-        children: [
-          const ModelSelectorButton(),
-          if (activeModel != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                '${activeModel.sizeString} · ${activeModel.parameterString}',
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: AppTheme.textTertiary,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
-        ],
-      ),
+      title: const ModelSelectorButton(),
       actions: [
         NewChatButton(onPressed: _newChat),
         const SizedBox(width: 12),
@@ -331,10 +330,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       padding: EdgeInsets.only(
-        left: 12,
-        right: 12,
-        top: 10,
-        bottom: MediaQuery.of(context).padding.bottom + 10,
+        left: 14,
+        right: 14,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -343,45 +342,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: Container(
               decoration: BoxDecoration(
                 color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppTheme.border),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextField(
-                      controller: _inputCtrl,
-                      enabled: !_isGenerating && !_isLoadingModel,
-                      style: const TextStyle(
-                          fontSize: 14, color: AppTheme.textPrimary),
-                      decoration: const InputDecoration(
-                        hintText: 'Message',
-                        hintStyle: TextStyle(color: AppTheme.textTertiary),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 12),
-                        isDense: true,
-                      ),
-                      maxLines: 6,
-                      minLines: 1,
-                      textInputAction: TextInputAction.newline,
-                    ),
+              child: TextField(
+                controller: _inputCtrl,
+                enabled: !_isGenerating && !_isLoadingModel,
+                style:
+                    const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: 'Ask anything',
+                  hintStyle: TextStyle(color: AppTheme.textTertiary),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6, bottom: 6),
-                    child: IconButton(
-                      icon: const Icon(Icons.mic_none_rounded,
-                          size: 18, color: AppTheme.textTertiary),
-                      onPressed: () {},
-                      constraints:
-                          const BoxConstraints(minWidth: 32, minHeight: 32),
-                      padding: EdgeInsets.zero,
-                    ),
-                  ),
-                ],
+                  isDense: true,
+                ),
+                maxLines: 6,
+                minLines: 1,
+                textInputAction: TextInputAction.newline,
               ),
             ),
           ),
@@ -398,7 +381,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       : _hasText
                           ? AppTheme.accent
                           : AppTheme.surface,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: _isLoadingModel
                     ? AppTheme.border
