@@ -28,6 +28,8 @@ class _ModelManagerScreenState extends ConsumerState<ModelManagerScreen>
   @override
   void initState() {
     super.initState();
+    ref.read(modelSearchQueryProvider.notifier).state = '';
+    ref.read(selectedCategoryProvider.notifier).state = null;
     _tabController = TabController(length: 2, vsync: this);
   }
 
@@ -546,6 +548,12 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
   final _ctrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _ctrl.text = ref.read(modelSearchQueryProvider);
+  }
+
+  @override
   void dispose() {
     _ctrl.dispose();
     super.dispose();
@@ -553,6 +561,14 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String>(modelSearchQueryProvider, (_, next) {
+      if (_ctrl.text == next) return;
+      _ctrl.value = TextEditingValue(
+        text: next,
+        selection: TextSelection.collapsed(offset: next.length),
+      );
+    });
+
     return TextField(
       controller: _ctrl,
       onChanged: (v) => ref.read(modelSearchQueryProvider.notifier).state = v,
