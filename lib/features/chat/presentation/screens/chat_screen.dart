@@ -44,12 +44,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   bool _hasText = false;
   bool _isGenerating = false;
+  bool _isStoppingGeneration = false;
   bool _isLoadingModel = false;
   bool _autoScrollWithStream = true;
   DateTime? _lastStreamScrollAt;
   String? _modelLoadError;
 
   StreamSubscription? _streamSub;
+  Future<void>? _stopFuture;
+  int _generationRunId = 0;
+  String? _activeAssistantId;
+  String _activeAssistantContent = '';
+  static const String _interruptedMessage = 'You interrupted the response.';
 
   @override
   void initState() {
@@ -71,6 +77,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void dispose() {
     _streamSub?.cancel();
+    ref.read(inferenceServiceProvider).stopGeneration();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -121,6 +128,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _sendMessage() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _isGenerating) return;
+    final stopFuture = _stopFuture;
+    if (_isStoppingGeneration && stopFuture != null) {
+      await stopFuture;
+    }
+    if (!mounted || _isGenerating) return;
 
     final convo = ref
         .read(conversationsRepositoryProvider)
@@ -155,6 +167,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _isGenerating = true;
       _autoScrollWithStream = true;
     });
+    final runId = ++_generationRunId;
+    _activeAssistantContent = '';
+
+    final assistantId = const Uuid().v4();
+    final assistantMsg = ChatMessage(
+      id: assistantId,
+      conversationId: widget.conversationId,
+      role: MessageRole.assistant,
+      content: '',
+      timestamp: DateTime.now(),
+      isStreaming: true,
+    );
+    _activeAssistantId = assistantId;
 
     // Persist user message
     final userMsg = ChatMessage(
@@ -167,21 +192,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     await ref
         .read(messagesProvider(widget.conversationId).notifier)
         .addMessage(userMsg);
+    if (!_isRunActive(runId)) {
+      await _addInterruptedMessageIfNeeded(assistantMsg);
+      return;
+    }
     _scrollToBottom(force: true);
 
+    await _stopFuture;
+    if (!_isRunActive(runId)) {
+      await _addInterruptedMessageIfNeeded(assistantMsg);
+      return;
+    }
+
     // Add empty assistant bubble for streaming
-    final assistantId = const Uuid().v4();
-    final assistantMsg = ChatMessage(
-      id: assistantId,
-      conversationId: widget.conversationId,
-      role: MessageRole.assistant,
-      content: '',
-      timestamp: DateTime.now(),
-      isStreaming: true,
-    );
     await ref
         .read(messagesProvider(widget.conversationId).notifier)
         .addMessage(assistantMsg);
+    if (!_isRunActive(runId)) {
+      await _finalizeInterruptedMessage(assistantId, assistantMsg);
+      return;
+    }
 
     final history = ref.read(messagesProvider(widget.conversationId));
 
@@ -197,25 +227,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _streamSub = stream.listen(
       (token) {
+        if (!_isCurrentGeneration(runId, assistantId)) return;
         accumulated += token;
+        _activeAssistantContent = accumulated;
         ref
             .read(messagesProvider(widget.conversationId).notifier)
-            .updateLastMessage(assistantMsg.copyWith(
+            .updateMessage(assistantMsg.copyWith(
               content: accumulated,
               isStreaming: true,
             ));
         _scrollToBottom();
       },
       onDone: () async {
+        if (!_isCurrentGeneration(runId, assistantId)) return;
         if (accumulated.trim().isEmpty) {
           await ref
               .read(messagesProvider(widget.conversationId).notifier)
-              .updateLastMessage(assistantMsg.copyWith(
-                content:
-                    'Error: The model returned no text. Try Qwen2.5 0.5B, Gemma 3 1B, or Llama 3.2 1B.',
+              .updateMessage(assistantMsg.copyWith(
+                content: 'Error: The model returned no text. Try again.',
                 isStreaming: false,
                 isError: true,
               ));
+          _activeAssistantId = null;
+          _activeAssistantContent = '';
           if (mounted) setState(() => _isGenerating = false);
           return;
         }
@@ -227,34 +261,150 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
         await ref
             .read(messagesProvider(widget.conversationId).notifier)
-            .updateLastMessage(assistantMsg.copyWith(
+            .updateMessage(assistantMsg.copyWith(
               content: accumulated,
               isStreaming: false,
               tokenCount: tokenCount,
               generationSeconds: elapsed,
               tokensPerSecond: tps,
             ));
+        _activeAssistantId = null;
+        _activeAssistantContent = '';
         if (mounted) setState(() => _isGenerating = false);
         _scrollToBottom(force: true);
       },
       onError: (e) async {
+        if (!_isCurrentGeneration(runId, assistantId)) return;
         await ref
             .read(messagesProvider(widget.conversationId).notifier)
-            .updateLastMessage(assistantMsg.copyWith(
+            .updateMessage(assistantMsg.copyWith(
               content: _friendlyGenerationError(e),
               isStreaming: false,
               isError: true,
             ));
+        _activeAssistantId = null;
+        _activeAssistantContent = '';
         if (mounted) setState(() => _isGenerating = false);
       },
       cancelOnError: true,
     );
   }
 
-  void _stopGeneration() {
-    _streamSub?.cancel();
-    ref.read(inferenceServiceProvider).stopGeneration();
-    setState(() => _isGenerating = false);
+  bool _isCurrentGeneration(int runId, String assistantId) {
+    return _isRunActive(runId) && _activeAssistantId == assistantId;
+  }
+
+  bool _isRunActive(int runId) {
+    return mounted && _generationRunId == runId && _isGenerating;
+  }
+
+  Future<void> _stopGeneration() async {
+    if (!_isGenerating) {
+      return;
+    }
+    await _stopGenerationInternal();
+  }
+
+  Future<void> _stopGenerationInternal() async {
+    if (!_isGenerating) return;
+
+    final assistantId = _activeAssistantId;
+    final content = _activeAssistantContent;
+    _generationRunId++;
+    _activeAssistantId = null;
+    _activeAssistantContent = '';
+    final streamSub = _streamSub;
+    _streamSub = null;
+
+    if (mounted) {
+      setState(() {
+        _isGenerating = false;
+        _isStoppingGeneration = false;
+      });
+    }
+
+    late Future<void> trackedCleanup;
+    final cleanup = Future<void>(() async {
+      await streamSub?.cancel();
+      await ref.read(inferenceServiceProvider).stopGeneration();
+    });
+    trackedCleanup = cleanup.catchError((_) {}).whenComplete(() {
+      if (identical(_stopFuture, trackedCleanup)) {
+        _stopFuture = null;
+      }
+    });
+    _stopFuture = trackedCleanup;
+
+    if (assistantId == null) return;
+
+    final notifier = ref.read(messagesProvider(widget.conversationId).notifier);
+    ChatMessage? message;
+    for (final existing in ref.read(messagesProvider(widget.conversationId))) {
+      if (existing.id == assistantId) {
+        message = existing;
+        break;
+      }
+    }
+
+    if (message == null) return;
+    if (content.trim().isEmpty) {
+      await notifier.updateMessage(message.copyWith(
+        content: _interruptedMessage,
+        isStreaming: false,
+        isError: false,
+      ));
+    } else {
+      await notifier.updateMessage(message.copyWith(
+        content: content,
+        isStreaming: false,
+      ));
+    }
+  }
+
+  Future<void> _addInterruptedMessageIfNeeded(ChatMessage assistantMsg) async {
+    final exists = ref
+        .read(messagesProvider(widget.conversationId))
+        .any((message) => message.id == assistantMsg.id);
+    if (exists) {
+      await _finalizeInterruptedMessage(assistantMsg.id, assistantMsg);
+      return;
+    }
+    await ref.read(messagesProvider(widget.conversationId).notifier).addMessage(
+          assistantMsg.copyWith(
+            content: _interruptedMessage,
+            isStreaming: false,
+            isError: false,
+          ),
+        );
+  }
+
+  Future<void> _finalizeInterruptedMessage(
+    String assistantId,
+    ChatMessage fallback,
+  ) async {
+    final notifier = ref.read(messagesProvider(widget.conversationId).notifier);
+    ChatMessage? message;
+    for (final existing in ref.read(messagesProvider(widget.conversationId))) {
+      if (existing.id == assistantId) {
+        message = existing;
+        break;
+      }
+    }
+    if (message == null) {
+      await notifier.addMessage(fallback.copyWith(
+        content: _interruptedMessage,
+        isStreaming: false,
+        isError: false,
+      ));
+      return;
+    }
+    await notifier.updateMessage(message.copyWith(
+      content: message.content.trim().isEmpty
+          ? _interruptedMessage
+          : message.content,
+      isStreaming: false,
+      isError: false,
+    ));
   }
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
@@ -338,27 +488,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     List<ChatMessage> history,
     String currentUserMessageId,
   ) {
-    const maxMessages = 4;
-    const maxCharsPerMessage = 700;
+    const maxMessages = 16;
+    const maxTotalChars = 5200;
+    const maxCharsPerMessage = 900;
 
-    return history
+    final eligible = history
         .where((m) =>
             m.id != currentUserMessageId &&
             !m.isStreaming &&
             !m.isError &&
             m.content.trim().isNotEmpty)
-        .toList()
-        .reversed
-        .take(maxMessages)
-        .toList()
-        .reversed
-        .map((m) {
-      final content = m.content.trim();
-      if (content.length <= maxCharsPerMessage) return m;
-      return m.copyWith(
-        content: content.substring(content.length - maxCharsPerMessage),
-      );
-    }).toList();
+        .toList();
+
+    final selected = <ChatMessage>[];
+    var usedChars = 0;
+
+    for (final message in eligible.reversed) {
+      if (selected.length >= maxMessages || usedChars >= maxTotalChars) break;
+
+      var content = message.content.trim();
+      if (content.length > maxCharsPerMessage) {
+        content = content.substring(content.length - maxCharsPerMessage);
+      }
+
+      final remaining = maxTotalChars - usedChars;
+      if (content.length > remaining) {
+        content = content.substring(content.length - remaining);
+      }
+
+      selected.add(message.copyWith(content: content));
+      usedChars += content.length;
+    }
+
+    return selected.reversed.toList();
   }
 
   String _friendlyGenerationError(Object error) {
@@ -531,7 +693,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ? IconButton(
                         icon: Icon(Icons.stop_rounded,
                             size: 16, color: AppTheme.accent),
-                        onPressed: _stopGeneration,
+                        onPressed: () => _stopGeneration(),
                         padding: EdgeInsets.zero,
                       )
                     : IconButton(

@@ -16,6 +16,8 @@ class InferenceService {
   final FlutterLlama _llama = FlutterLlama.instance;
   AiModel? _loadedModel;
   bool _isLoading = false;
+  int _generationEpoch = 0;
+  bool _stopRequested = false;
 
   bool get isModelLoaded => _loadedModel != null;
   AiModel? get loadedModel => _loadedModel;
@@ -64,54 +66,63 @@ class InferenceService {
     required List<ChatMessage> history,
     required String userMessage,
     double temperature = 0.7,
-    int maxTokens = 0,
+    int maxTokens = 512,
     String? systemPrompt,
   }) async* {
     if (_loadedModel == null) {
       throw Exception('No model loaded. Please select a downloaded model.');
     }
 
+    final epoch = ++_generationEpoch;
+    _stopRequested = false;
+    final model = _loadedModel!;
     final prompt = _buildPrompt(
       history: history,
       userMessage: userMessage,
       systemPrompt: systemPrompt,
-      model: _loadedModel!,
-    );
-    var cleaned = await _generateText(
-      prompt: prompt,
-      model: _loadedModel!,
-      temperature: temperature,
-      maxTokens: maxTokens,
+      model: model,
     );
 
-    if (cleaned.trim().isEmpty) {
-      AppLog.debug('[Inference] Empty response. Retrying with simple prompt.');
-      cleaned = await _generateText(
-        prompt: _buildSimplePrompt(
-          history: history,
-          userMessage: userMessage,
-          systemPrompt: systemPrompt,
+    var raw = '';
+    var emitted = '';
+    try {
+      await for (final token in _llama.generateStream(
+        GenerationParams(
+          prompt: prompt,
+          maxTokens: maxTokens,
+          temperature: temperature <= 0 ? 0.8 : temperature,
+          topP: 0.95,
+          topK: 50,
+          repeatPenalty: 1.1,
+          stopSequences: _stopSequencesFor(model),
         ),
-        model: _loadedModel!,
-        temperature: 0.8,
-        maxTokens: maxTokens,
-        useStopSequences: false,
-      );
-    }
+      )) {
+        if (_stopRequested || epoch != _generationEpoch) {
+          break;
+        }
 
-    if (cleaned.trim().isEmpty) {
-      throw Exception(
-        'The model returned no text. Try a smaller compatible GGUF model such as Qwen2.5 0.5B or Llama 3.2 1B.',
-      );
-    }
-
-    for (final codePoint in cleaned.runes) {
-      yield String.fromCharCode(codePoint);
-      await Future<void>.delayed(const Duration(milliseconds: 8));
+        raw += token;
+        final cleaned = _cleanResponse(raw, model);
+        if (cleaned.length > emitted.length) {
+          final next = cleaned.substring(emitted.length);
+          emitted = cleaned;
+          yield next;
+        }
+        if (_containsStopSequence(raw, model)) {
+          await _llama.stopGeneration();
+          break;
+        }
+      }
+    } finally {
+      if (_stopRequested || epoch != _generationEpoch) {
+        await _llama.stopGeneration();
+      }
     }
   }
 
   Future<void> stopGeneration() async {
+    _stopRequested = true;
+    _generationEpoch++;
     await _llama.stopGeneration();
   }
 
@@ -271,28 +282,6 @@ class InferenceService {
     return buffer.toString();
   }
 
-  String _buildSimplePrompt({
-    required List<ChatMessage> history,
-    required String userMessage,
-    String? systemPrompt,
-  }) {
-    final buffer = StringBuffer();
-    final system = systemPrompt?.trim();
-    if (system != null && system.isNotEmpty) {
-      buffer.writeln('System: $system');
-    }
-    for (final message in history.where(
-      (m) => !m.isStreaming && m.content.trim().isNotEmpty,
-    )) {
-      final role = message.role == MessageRole.assistant ? 'Assistant' : 'User';
-      buffer.writeln('$role: ${message.content.trim()}');
-    }
-    buffer
-      ..writeln('User: ${userMessage.trim()}')
-      ..write('Assistant:');
-    return buffer.toString();
-  }
-
   void _writeChatMlMessage(StringBuffer buffer, String role, String content) {
     buffer
       ..write('<|im_start|>')
@@ -325,6 +314,10 @@ class InferenceService {
       return const ['</s>'];
     }
     return const ['<|im_end|>'];
+  }
+
+  bool _containsStopSequence(String text, AiModel model) {
+    return _stopSequencesFor(model).any(text.contains);
   }
 
   String _cleanResponse(String text, AiModel model) {
@@ -384,42 +377,6 @@ class InferenceService {
     );
     cleaned = cleaned.replaceAll(danglingThink, '');
     return cleaned;
-  }
-
-  Future<String> _generateText({
-    required String prompt,
-    required AiModel model,
-    required double temperature,
-    required int maxTokens,
-    bool useStopSequences = true,
-  }) async {
-    try {
-      final response = await _llama
-          .generate(
-            GenerationParams(
-              prompt: prompt,
-              maxTokens: maxTokens,
-              temperature: temperature <= 0 ? 0.8 : temperature,
-              topP: 0.95,
-              topK: 50,
-              repeatPenalty: 1.1,
-              stopSequences:
-                  useStopSequences ? _stopSequencesFor(model) : const [],
-            ),
-          )
-          .timeout(const Duration(minutes: 10));
-      AppLog.debug(
-        '[Inference] Raw response length=${response.text.length}, tokens=${response.tokensGenerated}',
-      );
-      return _cleanResponse(response.text, model);
-    } on TimeoutException {
-      await stopGeneration();
-      throw Exception('Generation timed out. Try a shorter prompt.');
-    } catch (e, stackTrace) {
-      AppLog.error(
-          '[Inference] Generate failed for ${model.id}', e, stackTrace);
-      throw Exception('Generation failed. Try a smaller model or re-download.');
-    }
   }
 
   Future<bool> _looksLikeGguf(File file) async {

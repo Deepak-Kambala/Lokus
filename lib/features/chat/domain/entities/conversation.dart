@@ -54,6 +54,7 @@ class Conversation extends HiveObject {
     bool? isPinned,
     int? messageCount,
     String? lastMessage,
+    bool clearLastMessage = false,
     String? systemPrompt,
   }) {
     return Conversation(
@@ -65,7 +66,7 @@ class Conversation extends HiveObject {
       updatedAt: updatedAt ?? this.updatedAt,
       isPinned: isPinned ?? this.isPinned,
       messageCount: messageCount ?? this.messageCount,
-      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessage: clearLastMessage ? null : lastMessage ?? this.lastMessage,
       systemPrompt: systemPrompt ?? this.systemPrompt,
     );
   }

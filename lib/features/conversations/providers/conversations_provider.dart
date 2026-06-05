@@ -161,7 +161,19 @@ class ConversationsRepository {
     if (message != null) {
       final convo = _convoBox.get(message.conversationId);
       if (convo != null) {
-        await _persistConversation(convo);
+        final messages = getMessages(convo.id);
+        final lastMessage = messages.isEmpty
+            ? null
+            : (messages.last.content.length > 60
+                ? '${messages.last.content.substring(0, 60)}...'
+                : messages.last.content);
+        final updated = convo.copyWith(
+          messageCount: messages.length,
+          lastMessage: lastMessage,
+          clearLastMessage: lastMessage == null,
+        );
+        await _convoBox.put(convo.id, updated);
+        await _persistConversation(updated);
       }
     }
   }
@@ -330,9 +342,12 @@ final messagesProvider =
 class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   final ConversationsRepository _repo;
   final String _conversationId;
+  Future<void> _updateQueue = Future<void>.value();
 
   MessagesNotifier(this._repo, this._conversationId)
-      : super(_repo.getMessages(_conversationId));
+      : super(_repo.getMessages(_conversationId)) {
+    Future.microtask(_repairInterruptedMessages);
+  }
 
   Future<void> addMessage(ChatMessage message) async {
     await _repo.addMessage(message);
@@ -346,6 +361,28 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     }
   }
 
+  Future<void> updateMessage(ChatMessage message) async {
+    final queued = _updateQueue.then((_) async {
+      ChatMessage? existing;
+      for (final current in state) {
+        if (current.id == message.id) {
+          existing = current;
+          break;
+        }
+      }
+      if (existing != null && !existing.isStreaming && message.isStreaming) {
+        return;
+      }
+      await _repo.updateMessage(message);
+      state = [
+        for (final existing in state)
+          if (existing.id == message.id) message else existing,
+      ];
+    });
+    _updateQueue = queued.catchError((_) {});
+    await queued;
+  }
+
   Future<void> deleteMessage(String messageId) async {
     await _repo.deleteMessage(messageId);
     state = state.where((m) => m.id != messageId).toList();
@@ -353,5 +390,31 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
 
   void refresh() {
     state = _repo.getMessages(_conversationId);
+  }
+
+  Future<void> _repairInterruptedMessages() async {
+    var messages = state;
+    var changed = false;
+
+    for (final message in List<ChatMessage>.from(messages)) {
+      if (!message.isStreaming) continue;
+
+      if (message.content.trim().isEmpty) {
+        await _repo.deleteMessage(message.id);
+        messages = messages.where((m) => m.id != message.id).toList();
+      } else {
+        final repaired = message.copyWith(isStreaming: false);
+        await _repo.updateMessage(repaired);
+        messages = [
+          for (final existing in messages)
+            if (existing.id == repaired.id) repaired else existing,
+        ];
+      }
+      changed = true;
+    }
+
+    if (changed) {
+      state = messages;
+    }
   }
 }
