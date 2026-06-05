@@ -44,7 +44,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   bool _hasText = false;
   bool _isGenerating = false;
-  bool _isStoppingGeneration = false;
   bool _isLoadingModel = false;
   bool _autoScrollWithStream = true;
   DateTime? _lastStreamScrollAt;
@@ -128,10 +127,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _sendMessage() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _isGenerating) return;
-    final stopFuture = _stopFuture;
-    if (_isStoppingGeneration && stopFuture != null) {
-      await stopFuture;
-    }
+    await _waitBrieflyForStopCleanup();
     if (!mounted || _isGenerating) return;
 
     final convo = ref
@@ -198,7 +194,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
     _scrollToBottom(force: true);
 
-    await _stopFuture;
+    await _waitBrieflyForStopCleanup();
     if (!_isRunActive(runId)) {
       await _addInterruptedMessageIfNeeded(assistantMsg);
       return;
@@ -298,6 +294,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return mounted && _generationRunId == runId && _isGenerating;
   }
 
+  Future<void> _waitBrieflyForStopCleanup() async {
+    final stopFuture = _stopFuture;
+    if (stopFuture == null) return;
+    await stopFuture.timeout(
+      const Duration(milliseconds: 800),
+      onTimeout: () {},
+    );
+  }
+
   Future<void> _stopGeneration() async {
     if (!_isGenerating) {
       return;
@@ -319,7 +324,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (mounted) {
       setState(() {
         _isGenerating = false;
-        _isStoppingGeneration = false;
       });
     }
 

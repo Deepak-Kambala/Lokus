@@ -127,7 +127,6 @@ class FlutterLlama {
     final controller = StreamController<String>();
     const eventChannel = EventChannel('flutter_llama/stream');
     StreamSubscription? tokenSub;
-    Future<void>? nativeStreamCall;
     var closed = false;
     var canceled = false;
 
@@ -155,13 +154,18 @@ class FlutterLlama {
       );
 
       Future<void>(() async {
-        await _activeStreamDone;
+        final active = _activeStreamDone;
+        if (active != null) {
+          await active.timeout(
+            const Duration(milliseconds: 800),
+            onTimeout: () {},
+          );
+        }
         if (canceled || controller.isClosed) return;
 
         final call = _channel
             .invokeMethod<void>('generateStream', params.toMap())
             .whenComplete(closeOnce);
-        nativeStreamCall = call;
         _activeStreamDone = call;
 
         try {
@@ -183,7 +187,6 @@ class FlutterLlama {
       canceled = true;
       await stopGeneration();
       await tokenSub?.cancel();
-      await nativeStreamCall;
     };
 
     yield* controller.stream;

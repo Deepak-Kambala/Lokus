@@ -254,18 +254,24 @@ class FlutterLlamaPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Stream
                 while (!shouldStop) {
                     val token = nativeGenerateStreamNext()
                     if (token != null) {
+                        val stoppedBeforePost = shouldStop
                         mainHandler.post {
-                            sink.success(token)
+                            if (!stoppedBeforePost) {
+                                sink.success(token)
+                            }
                         }
                     } else {
                         break
                     }
                 }
 
+                val stopped = shouldStop
                 nativeGenerateStreamEnd()
 
                 mainHandler.post {
-                    sink.endOfStream()
+                    if (!stopped) {
+                        sink.endOfStream()
+                    }
                     result.success(null)
                 }
             } catch (e: Exception) {
@@ -377,4 +383,3 @@ class FlutterLlamaPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Stream
         val contextSize: Int
     )
 }
-
