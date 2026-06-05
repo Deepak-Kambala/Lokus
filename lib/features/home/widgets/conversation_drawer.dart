@@ -37,7 +37,9 @@ class _ConversationDrawerState extends ConsumerState<ConversationDrawer> {
             .toList();
 
     final pinned = filtered.where((c) => c.isPinned).toList();
-    final recent = filtered.where((c) => !c.isPinned).toList();
+    final unpinned = filtered.where((c) => !c.isPinned).toList();
+    final today = unpinned.where(_isToday).toList();
+    final recent = unpinned.where((c) => !_isToday(c)).toList();
 
     return Drawer(
       backgroundColor: AppTheme.surface,
@@ -56,12 +58,17 @@ class _ConversationDrawerState extends ConsumerState<ConversationDrawer> {
                       ),
                       children: [
                         if (pinned.isNotEmpty) ...[
-                          _SectionLabel('PINNED'),
+                          _SectionLabel('Pinned'),
                           ...pinned.map((c) => _ConversationTile(convo: c)),
                           SizedBox(height: 8),
                         ],
+                        if (today.isNotEmpty) ...[
+                          _SectionLabel('Today'),
+                          ...today.map((c) => _ConversationTile(convo: c)),
+                          SizedBox(height: 8),
+                        ],
                         if (recent.isNotEmpty) ...[
-                          if (pinned.isNotEmpty) _SectionLabel('RECENT'),
+                          _SectionLabel('Recent'),
                           ...recent.map((c) => _ConversationTile(convo: c)),
                         ],
                       ],
@@ -72,6 +79,14 @@ class _ConversationDrawerState extends ConsumerState<ConversationDrawer> {
         ),
       ),
     );
+  }
+
+  bool _isToday(Conversation conversation) {
+    final now = DateTime.now();
+    final updated = conversation.updatedAt.toLocal();
+    return updated.year == now.year &&
+        updated.month == now.month &&
+        updated.day == now.day;
   }
 }
 
@@ -171,10 +186,10 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: FontWeight.w600,
           color: AppTheme.textTertiary,
-          letterSpacing: 1.2,
+          letterSpacing: 0,
         ),
       ),
     );

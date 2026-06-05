@@ -12,6 +12,7 @@ import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/hive_constants.dart';
 import '../../../../services/storage_service.dart';
+import '../../../conversations/providers/conversations_provider.dart';
 import '../../../models/data/repositories/models_repository.dart';
 import '../../../models/providers/models_provider.dart';
 
@@ -1531,6 +1532,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
             folderUri: path,
             folderPath: path,
           );
+      await _restoreChatsAfterStorageChange(ref);
 
       if (context.mounted) {
         Navigator.pop(context);
@@ -1598,6 +1600,7 @@ class _ChangeFolderSheet extends ConsumerWidget {
             folderUri: path,
             folderPath: path,
           );
+      await _restoreChatsAfterStorageChange(ref);
 
       if (context.mounted) {
         Navigator.pop(context);
@@ -1638,6 +1641,14 @@ class _ChangeFolderSheet extends ConsumerWidget {
           folderUri: path,
           folderPath: path,
         );
+    await _restoreChatsAfterStorageChange(ref);
+  }
+
+  Future<void> _restoreChatsAfterStorageChange(WidgetRef ref) async {
+    await ref
+        .read(conversationsRepositoryProvider)
+        .restoreConversationsFromStorage();
+    ref.read(conversationsRefreshProvider.notifier).state++;
   }
 
   Future<bool> _ensureExternalStoragePermission(

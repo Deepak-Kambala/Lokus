@@ -11,9 +11,11 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'core/constants/hive_constants.dart';
 import 'features/chat/domain/entities/chat_message.dart';
 import 'features/chat/domain/entities/conversation.dart';
+import 'features/conversations/providers/conversations_provider.dart';
 import 'features/models/domain/entities/ai_model.dart';
 import 'router/app_router.dart';
 import 'shared/theme/app_theme.dart';
+import 'services/storage_service.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -97,6 +99,9 @@ Future<void> _prepareSessionState() async {
 
   final storagePath = settings.get(HiveConstants.storageFolderPath) as String?;
   if (storagePath == null || storagePath.isEmpty) return;
+
+  await ConversationsRepository(StorageService())
+      .restoreConversationsFromStorage();
 
   final chatsDir = Directory('$storagePath/chats');
   if (!await chatsDir.exists()) return;

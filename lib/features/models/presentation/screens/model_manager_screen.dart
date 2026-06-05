@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../../shared/theme/app_theme.dart';
+import '../../../conversations/providers/conversations_provider.dart';
 import '../../domain/entities/ai_model.dart';
 import '../../data/repositories/models_repository.dart';
 import '../../providers/models_provider.dart';
@@ -384,6 +385,10 @@ class _ModelFolderSheet extends ConsumerWidget {
           folderUri: path,
           folderPath: path,
         );
+    await ref
+        .read(conversationsRepositoryProvider)
+        .restoreConversationsFromStorage();
+    ref.read(conversationsRefreshProvider.notifier).state++;
     if (!context.mounted) return;
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(

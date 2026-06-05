@@ -123,6 +123,28 @@ class ConversationsRepository {
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
   }
 
+  Future<int> restoreConversationsFromStorage() async {
+    final root = _storageService.storageFolderPath;
+    if (root == null || root.isEmpty) return 0;
+
+    final chatsDir = Directory(p.join(root, 'chats'));
+    if (!await chatsDir.exists()) return 0;
+
+    var restored = 0;
+    await for (final entity
+        in chatsDir.list(recursive: true, followLinks: false)) {
+      if (entity is! File || !entity.path.toLowerCase().endsWith('.json')) {
+        continue;
+      }
+
+      final restoredConversation = await _restoreConversationFile(entity);
+      if (restoredConversation) {
+        restored++;
+      }
+    }
+    return restored;
+  }
+
   Future<void> addMessage(ChatMessage message) async {
     await _msgBox.put(message.id, message);
 
@@ -284,6 +306,86 @@ class ConversationsRepository {
     await file.writeAsString(payload, flush: true);
   }
 
+  Future<bool> _restoreConversationFile(File file) async {
+    try {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map<String, dynamic>) return false;
+
+      final convoJson = decoded['conversation'] is Map
+          ? Map<String, dynamic>.from(decoded['conversation'] as Map)
+          : decoded;
+      final id = _jsonString(convoJson['id']);
+      if (id == null || id.isEmpty || _convoBox.containsKey(id)) {
+        return false;
+      }
+
+      final messagesJson = convoJson['messages'];
+      final messages = messagesJson is List
+          ? messagesJson
+              .whereType<Map>()
+              .map((m) => _messageFromJson(Map<String, dynamic>.from(m), id))
+              .whereType<ChatMessage>()
+              .toList()
+          : <ChatMessage>[];
+      messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+      final parentModelId = p.basename(file.parent.path);
+      final modelId = _jsonString(convoJson['modelId']) ?? parentModelId;
+      final modelName = _jsonString(convoJson['modelName']) ?? modelId;
+      final createdAt =
+          _jsonDate(convoJson['createdAt']) ?? _firstMessageDate(messages);
+      final updatedAt =
+          _jsonDate(convoJson['updatedAt']) ?? _lastMessageDate(messages);
+      final lastContent = messages.isEmpty ? null : messages.last.content;
+      final title = _jsonString(convoJson['title']) ??
+          (messages.isNotEmpty
+              ? _trimForTitle(messages.first.content)
+              : 'Imported Chat');
+
+      final convo = Conversation(
+        id: id,
+        title: title.isEmpty ? 'Imported Chat' : title,
+        modelId: modelId,
+        modelName: modelName,
+        createdAt: createdAt ?? DateTime.now(),
+        updatedAt: updatedAt ?? DateTime.now(),
+        isPinned: convoJson['isPinned'] == true,
+        messageCount: messages.length,
+        lastMessage:
+            lastContent == null ? null : _trimForLastMessage(lastContent),
+        systemPrompt: _jsonString(convoJson['systemPrompt']),
+      );
+
+      await _convoBox.put(convo.id, convo);
+      for (final message in messages) {
+        await _msgBox.put(message.id, message);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  ChatMessage? _messageFromJson(Map<String, dynamic> json, String convoId) {
+    final id = _jsonString(json['id']);
+    final content = _jsonString(json['content']) ?? '';
+    final timestamp = _jsonDate(json['timestamp']) ?? DateTime.now();
+    if (id == null || id.isEmpty) return null;
+
+    return ChatMessage(
+      id: id,
+      conversationId: _jsonString(json['conversationId']) ?? convoId,
+      role: _roleFromJson(_jsonString(json['role'])),
+      content: content,
+      timestamp: timestamp,
+      tokenCount: _jsonInt(json['tokenCount']),
+      generationSeconds: _jsonDouble(json['generationSeconds']),
+      tokensPerSecond: _jsonDouble(json['tokensPerSecond']),
+      isStreaming: false,
+      isError: json['isError'] == true,
+    );
+  }
+
   Future<void> _deleteConversationFile(Conversation convo) async {
     final root = _storageService.storageFolderPath;
     if (root == null || root.isEmpty) return;
@@ -316,6 +418,56 @@ class ConversationsRepository {
 
   String _safePathPart(String value) {
     return value.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+  }
+
+  MessageRole _roleFromJson(String? role) {
+    switch (role) {
+      case 'assistant':
+        return MessageRole.assistant;
+      case 'system':
+        return MessageRole.system;
+      case 'user':
+      default:
+        return MessageRole.user;
+    }
+  }
+
+  String? _jsonString(Object? value) => value is String ? value : null;
+
+  int? _jsonInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return null;
+  }
+
+  double? _jsonDouble(Object? value) {
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    return null;
+  }
+
+  DateTime? _jsonDate(Object? value) {
+    if (value is! String || value.isEmpty) return null;
+    return DateTime.tryParse(value);
+  }
+
+  DateTime? _firstMessageDate(List<ChatMessage> messages) {
+    return messages.isEmpty ? null : messages.first.timestamp;
+  }
+
+  DateTime? _lastMessageDate(List<ChatMessage> messages) {
+    return messages.isEmpty ? null : messages.last.timestamp;
+  }
+
+  String _trimForTitle(String value) {
+    final trimmed = value.trim();
+    if (trimmed.length <= 40) return trimmed;
+    return trimmed.substring(0, 40);
+  }
+
+  String _trimForLastMessage(String value) {
+    if (value.length <= 60) return value;
+    return '${value.substring(0, 60)}...';
   }
 }
 

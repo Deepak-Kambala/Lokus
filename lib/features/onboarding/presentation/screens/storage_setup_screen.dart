@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../conversations/providers/conversations_provider.dart';
 import '../../../../services/storage_service.dart';
 import '../../../../shared/theme/app_theme.dart';
 
@@ -236,6 +237,10 @@ class StorageSetupScreen extends ConsumerWidget {
         folderUri: uri ?? path,
         folderPath: path,
       );
+      await ref
+          .read(conversationsRepositoryProvider)
+          .restoreConversationsFromStorage();
+      ref.read(conversationsRefreshProvider.notifier).state++;
 
       if (context.mounted) {
         context.go('/home');
