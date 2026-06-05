@@ -1,87 +1,52 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static bool isLight = false;
-
-  static void setBrightnessMode(ThemeMode mode, Brightness platformBrightness) {
-    isLight = mode == ThemeMode.light ||
-        (mode == ThemeMode.system && platformBrightness == Brightness.light);
-  }
-
   // Colors
-  static Color get background =>
-      isLight ? Color(0xFFF7F7F8) : Color(0xFF0E0E10);
-  static Color get surface => isLight ? Color(0xFFFFFFFF) : Color(0xFF161618);
-  static Color get surfaceElevated =>
-      isLight ? Color(0xFFF0F0F2) : Color(0xFF1C1C1F);
-  static Color get surfaceHighlight =>
-      isLight ? Color(0xFFE6E6EA) : Color(0xFF242428);
-  static Color get border => isLight ? Color(0xFFD7D7DD) : Color(0xFF2A2A2E);
-  static Color get borderSubtle =>
-      isLight ? Color(0xFFEAEAEE) : Color(0xFF1F1F23);
+  static Color get background => Color(0xFF0E0E10);
+  static Color get surface => Color(0xFF161618);
+  static Color get surfaceElevated => Color(0xFF1C1C1F);
+  static Color get surfaceHighlight => Color(0xFF242428);
+  static Color get border => Color(0xFF2A2A2E);
+  static Color get borderSubtle => Color(0xFF1F1F23);
 
-  static Color get accent => isLight ? Color(0xFF111113) : Color(0xFFF5F5F7);
-  static Color get onAccent => isLight ? Color(0xFFFFFFFF) : Color(0xFF0E0E10);
-  static Color get accentLight =>
-      isLight ? Color(0xFF000000) : Color(0xFFFFFFFF);
-  static Color get accentDim => isLight ? Color(0xFFB8B8C0) : Color(0xFF5C5C62);
-  static Color get accentSurface =>
-      isLight ? Color(0xFFEDEDF1) : Color(0xFF242428);
+  static Color get accent => Color(0xFFF5F5F7);
+  static Color get onAccent => Color(0xFF0E0E10);
+  static Color get accentLight => Color(0xFFFFFFFF);
+  static Color get accentDim => Color(0xFF5C5C62);
+  static Color get accentSurface => Color(0xFF242428);
 
-  static Color get textPrimary =>
-      isLight ? Color(0xFF111113) : Color(0xFFF5F5F7);
-  static Color get textSecondary =>
-      isLight ? Color(0xFF5D5D66) : Color(0xFF8E8E93);
-  static Color get textTertiary =>
-      isLight ? Color(0xFF90909A) : Color(0xFF48484E);
-  static Color get textDisabled =>
-      isLight ? Color(0xFFB9B9C1) : Color(0xFF3A3A40);
+  static Color get textPrimary => Color(0xFFF5F5F7);
+  static Color get textSecondary => Color(0xFF8E8E93);
+  static Color get textTertiary => Color(0xFF48484E);
+  static Color get textDisabled => Color(0xFF3A3A40);
 
-  static Color get success => isLight ? Color(0xFF1F7A45) : Color(0xFFE6E6E8);
-  static Color get warning => isLight ? Color(0xFF8A6B14) : Color(0xFFB8B8BE);
-  static Color get error => isLight ? Color(0xFFB42318) : Color(0xFFFFFFFF);
-  static Color get info => isLight ? Color(0xFF3F4C66) : Color(0xFFD6D6DA);
+  static Color get success => Color(0xFFE6E6E8);
+  static Color get warning => Color(0xFFB8B8BE);
+  static Color get error => Color(0xFFFFFFFF);
+  static Color get info => Color(0xFFD6D6DA);
 
-  static Color get userBubble =>
-      isLight ? Color(0xFFEDEDF1) : Color(0xFF242428);
-  static Color get assistantBubble =>
-      isLight ? Color(0xFFFFFFFF) : Color(0xFF161618);
-
-  static ThemeData get lightTheme {
-    return darkTheme.copyWith(
-      brightness: Brightness.light,
-      scaffoldBackgroundColor: Color(0xFFF7F7F8),
-      colorScheme: ColorScheme.light(
-        primary: Color(0xFF111113),
-        secondary: Color(0xFF4B4B50),
-        surface: Color(0xFFFFFFFF),
-        surfaceContainerHighest: Color(0xFFEAEAED),
-        onPrimary: Colors.white,
-        onSecondary: Colors.white,
-        onSurface: Color(0xFF111113),
-        outline: Color(0xFFD8D8DD),
-        error: Color(0xFF111113),
-      ),
-    );
-  }
+  static Color get userBubble => Color(0xFF242428);
+  static Color get assistantBubble => Color(0xFF161618);
 
   static ThemeData get darkTheme {
+    final colorScheme = ColorScheme.dark(
+      primary: accent,
+      primaryContainer: accentDim,
+      secondary: accentLight,
+      surface: surface,
+      surfaceContainerHighest: surfaceHighlight,
+      onPrimary: onAccent,
+      onSecondary: onAccent,
+      onSurface: textPrimary,
+      outline: border,
+      error: error,
+    );
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: background,
-      colorScheme: ColorScheme.dark(
-        primary: accent,
-        primaryContainer: accentDim,
-        secondary: accentLight,
-        surface: surface,
-        surfaceContainerHighest: surfaceHighlight,
-        onPrimary: Colors.black,
-        onSecondary: Colors.black,
-        onSurface: textPrimary,
-        outline: border,
-        error: error,
-      ),
+      colorScheme: colorScheme,
       fontFamily: 'Inter',
       textTheme: TextTheme(
         displayLarge: TextStyle(
@@ -311,7 +276,7 @@ class AppTheme {
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return Colors.white;
+          if (states.contains(WidgetState.selected)) return onAccent;
           return textTertiary;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {

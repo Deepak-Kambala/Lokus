@@ -13,7 +13,6 @@ import 'features/chat/domain/entities/chat_message.dart';
 import 'features/chat/domain/entities/conversation.dart';
 import 'features/models/domain/entities/ai_model.dart';
 import 'router/app_router.dart';
-import 'services/storage_service.dart';
 import 'shared/theme/app_theme.dart';
 
 void main() {
@@ -83,6 +82,7 @@ Future<void> _prepareSessionState() async {
   final messages = Hive.box<ChatMessage>(HiveConstants.messagesBox);
 
   await settings.delete(HiveConstants.selectedModelId);
+  await settings.delete(HiveConstants.appTheme);
 
   final emptyConversationIds = conversations.values
       .where((convo) =>
@@ -128,32 +128,14 @@ class LokusApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
-    final themeModeName = ref.watch(appThemeModeProvider);
-    final themeMode = _themeModeFromName(themeModeName);
-    AppTheme.setBrightnessMode(
-      themeMode,
-      PlatformDispatcher.instance.platformBrightness,
-    );
 
     return MaterialApp.router(
       title: 'Lokus',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
+      theme: AppTheme.darkTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: themeMode,
+      themeMode: ThemeMode.dark,
       routerConfig: router,
     );
-  }
-
-  ThemeMode _themeModeFromName(String value) {
-    switch (value) {
-      case 'Light':
-        return ThemeMode.light;
-      case 'System':
-        return ThemeMode.system;
-      case 'Dark':
-      default:
-        return ThemeMode.dark;
-    }
   }
 }

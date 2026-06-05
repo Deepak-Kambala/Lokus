@@ -29,10 +29,6 @@ class SettingsScreen extends ConsumerWidget {
       HiveConstants.appLanguage,
       defaultValue: 'Auto',
     );
-    final themeMode = storageService.getSetting<String>(
-      HiveConstants.appTheme,
-      defaultValue: 'Dark',
-    );
     final activePrompt = storageService.getSetting<String>(
       HiveConstants.activeSystemPromptTitle,
       defaultValue: 'None',
@@ -88,12 +84,6 @@ class SettingsScreen extends ConsumerWidget {
             title: 'Response Language',
             subtitle: language,
             onTap: () => _showLanguageSheet(context, ref),
-          ),
-          _SettingsTile(
-            icon: Icons.contrast_rounded,
-            title: 'Theme Mode',
-            subtitle: themeMode,
-            onTap: () => _showThemeSheet(context, ref),
           ),
           _SectionHeader('INFO'),
           _SettingsTile(
@@ -163,13 +153,6 @@ class SettingsScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       builder: (ctx) => _LanguageSheet(ref: ref),
-    );
-  }
-
-  void _showThemeSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => _ThemeModeSheet(ref: ref),
     );
   }
 
@@ -1231,79 +1214,6 @@ class _LanguageSheet extends StatelessWidget {
                 },
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ThemeModeSheet extends StatelessWidget {
-  final WidgetRef ref;
-  const _ThemeModeSheet({required this.ref});
-
-  static const _modes = ['Dark', 'Light', 'System'];
-
-  @override
-  Widget build(BuildContext context) {
-    final storage = ref.read(storageServiceProvider);
-    final selected = storage.getSetting<String>(
-      HiveConstants.appTheme,
-      defaultValue: 'Dark',
-    );
-
-    return SafeArea(
-      child: Container(
-        decoration: BoxDecoration(color: AppTheme.surface),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(height: 12),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Theme Mode',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-              ),
-            ),
-            ..._modes.map(
-              (mode) => ListTile(
-                leading: Icon(
-                  mode == 'Dark'
-                      ? Icons.dark_mode_outlined
-                      : mode == 'Light'
-                          ? Icons.light_mode_outlined
-                          : Icons.phone_android_rounded,
-                  size: 18,
-                ),
-                title: Text(mode),
-                trailing: selected == mode
-                    ? Icon(Icons.check_rounded, color: AppTheme.accent)
-                    : null,
-                onTap: () async {
-                  await storage.setSetting(HiveConstants.appTheme, mode);
-                  ref.read(appThemeModeProvider.notifier).state = mode;
-                  ref.read(settingsRefreshProvider.notifier).state++;
-                  if (context.mounted) Navigator.pop(context);
-                },
-              ),
-            ),
-            SizedBox(height: 12),
           ],
         ),
       ),

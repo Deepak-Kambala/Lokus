@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +45,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _hasText = false;
   bool _isGenerating = false;
   bool _isLoadingModel = false;
+  bool _autoScrollWithStream = true;
+  DateTime? _lastStreamScrollAt;
   String? _modelLoadError;
 
   StreamSubscription? _streamSub;
@@ -150,6 +153,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     setState(() {
       _hasText = false;
       _isGenerating = true;
+      _autoScrollWithStream = true;
     });
 
     // Persist user message
@@ -260,14 +264,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (_scrollCtrl.hasClients) {
         final distanceFromBottom =
             _scrollCtrl.position.maxScrollExtent - _scrollCtrl.offset;
-        if (!force && distanceFromBottom > 120) return;
+        if (!force) {
+          if (!_autoScrollWithStream) return;
+          if (distanceFromBottom > 120) {
+            _autoScrollWithStream = false;
+            return;
+          }
+          final now = DateTime.now();
+          final last = _lastStreamScrollAt;
+          if (last != null && now.difference(last).inMilliseconds < 90) {
+            return;
+          }
+          _lastStreamScrollAt = now;
+        } else {
+          _autoScrollWithStream = true;
+        }
         _scrollCtrl.animateTo(
           _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 280),
+          duration: Duration(milliseconds: force ? 240 : 140),
           curve: Curves.easeOut,
         );
       }
     });
+  }
+
+  bool _handleMessageScroll(ScrollNotification notification) {
+    if (!_isGenerating) return false;
+
+    final distanceFromBottom =
+        notification.metrics.maxScrollExtent - notification.metrics.pixels;
+    if (notification is ScrollUpdateNotification &&
+        notification.dragDetails != null) {
+      _autoScrollWithStream = distanceFromBottom < 48;
+    } else if (notification is UserScrollNotification &&
+        notification.direction == ScrollDirection.idle &&
+        distanceFromBottom < 80) {
+      _autoScrollWithStream = true;
+    }
+
+    return false;
   }
 
   void _showSnack(String msg) {
@@ -382,10 +417,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Expanded(
             child: messages.isEmpty
                 ? _EmptyChat(modelName: convo?.modelName ?? '')
-                : _MessageList(
-                    messages: messages,
-                    scrollController: _scrollCtrl,
-                    conversationId: widget.conversationId,
+                : NotificationListener<ScrollNotification>(
+                    onNotification: _handleMessageScroll,
+                    child: _MessageList(
+                      messages: messages,
+                      scrollController: _scrollCtrl,
+                      conversationId: widget.conversationId,
+                    ),
                   ),
           ),
           _buildInputBar(),

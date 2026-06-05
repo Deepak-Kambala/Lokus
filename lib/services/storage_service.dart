@@ -6,12 +6,6 @@ final storageServiceProvider = Provider<StorageService>((ref) {
   return StorageService();
 });
 
-final appThemeModeProvider = StateProvider<String>((ref) {
-  return ref
-      .read(storageServiceProvider)
-      .getSetting<String>(HiveConstants.appTheme, defaultValue: 'Dark');
-});
-
 class StorageService {
   Box get _settingsBox => Hive.box(HiveConstants.settingsBox);
 
