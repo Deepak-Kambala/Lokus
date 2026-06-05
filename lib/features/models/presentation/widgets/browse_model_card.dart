@@ -114,9 +114,9 @@ class _ActionButton extends ConsumerWidget {
       case ModelStatus.downloaded:
         return _buildSelectButton(context, ref);
       case ModelStatus.downloading:
-        return _buildPauseButton(ref);
+        return _buildDownloadingActions(ref);
       case ModelStatus.paused:
-        return _buildResumeButton(ref);
+        return _buildPausedActions(ref);
       case ModelStatus.failed:
         return _buildRetryButton(ref);
       case ModelStatus.available:
@@ -140,6 +140,38 @@ class _ActionButton extends ConsumerWidget {
       tooltip: 'Pause',
       onTap: () =>
           ref.read(modelManagerProvider.notifier).pauseDownload(model.id),
+    );
+  }
+
+  Widget _buildStopButton(WidgetRef ref) {
+    return _IconActionBtn(
+      icon: Icons.stop_rounded,
+      color: AppTheme.error,
+      tooltip: 'Stop download',
+      onTap: () =>
+          ref.read(modelManagerProvider.notifier).cancelDownload(model.id),
+    );
+  }
+
+  Widget _buildDownloadingActions(WidgetRef ref) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildPauseButton(ref),
+        SizedBox(width: 8),
+        _buildStopButton(ref),
+      ],
+    );
+  }
+
+  Widget _buildPausedActions(WidgetRef ref) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildResumeButton(ref),
+        SizedBox(width: 8),
+        _buildStopButton(ref),
+      ],
     );
   }
 
@@ -238,6 +270,13 @@ class _DownloadProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pct = (model.downloadProgress * 100).toStringAsFixed(0);
+    final received = model.downloadReceivedBytes;
+    final total = model.downloadTotalBytes > 0
+        ? model.downloadTotalBytes
+        : (model.sizeGb * 1024 * 1024 * 1024).round();
+    final bytesText = received > 0
+        ? '${_formatBytes(received)} / ${_formatBytes(total)}'
+        : _formatBytes(total);
     final speed = model.downloadSpeedMbps > 0
         ? '${model.downloadSpeedMbps.toStringAsFixed(1)} MB/s'
         : '';
@@ -266,12 +305,16 @@ class _DownloadProgress extends StatelessWidget {
           SizedBox(height: 5),
           Row(
             children: [
-              Text(
-                '$pct%',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary,
+              Expanded(
+                child: Text(
+                  '$pct% · $bytesText',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ),
               if (speed.isNotEmpty) ...[
@@ -318,6 +361,14 @@ class _DownloadProgress extends StatelessWidget {
     final mins = seconds ~/ 60;
     if (mins < 60) return '${mins}m remaining';
     return '${mins ~/ 60}h ${mins % 60}m remaining';
+  }
+
+  String _formatBytes(int bytes) {
+    const gb = 1024 * 1024 * 1024;
+    const mb = 1024 * 1024;
+    if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(2)} GB';
+    if (bytes >= mb) return '${(bytes / mb).toStringAsFixed(1)} MB';
+    return '${(bytes / 1024).toStringAsFixed(0)} KB';
   }
 }
 

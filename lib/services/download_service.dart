@@ -78,6 +78,10 @@ class DownloadService {
       onComplete(finalPath);
       return finalPath;
     }
+    if (await finalFile.exists()) {
+      await finalFile.delete();
+      AppLog.debug('[Download] Deleted invalid final file for ${model.id}');
+    }
 
     // Resume support: check existing temp file size
     int startByte = 0;
@@ -156,7 +160,9 @@ class DownloadService {
       if (startByte > 0 && response.statusCode == 200) {
         await tmpFile.delete();
         AppLog.debug('[Download] Server ignored Range; restarting ${model.id}');
-        return downloadModel(
+        _tokens.remove(model.id);
+        _paused.remove(model.id);
+        return await downloadModel(
           model: model,
           onProgress: onProgress,
           onComplete: onComplete,
@@ -169,6 +175,8 @@ class DownloadService {
         if (await tmpFile.exists()) await tmpFile.delete();
         final msg = 'Downloaded file is not a GGUF model. $reason';
         AppLog.debug('[Download] Error: $msg');
+        _tokens.remove(model.id);
+        _paused.remove(model.id);
         onError(msg);
         return '';
       }
@@ -187,14 +195,20 @@ class DownloadService {
         if (_paused[model.id] == true) return '';
         // Cancelled — delete temp
         if (await tmpFile.exists()) await tmpFile.delete();
+        _tokens.remove(model.id);
+        _paused.remove(model.id);
         return '';
       }
       final msg = _friendlyError(e);
       AppLog.error('[Download] Error', msg);
+      _tokens.remove(model.id);
+      _paused.remove(model.id);
       onError(msg);
       return '';
     } catch (e) {
       AppLog.error('[Download] Unexpected', e);
+      _tokens.remove(model.id);
+      _paused.remove(model.id);
       onError('Download failed unexpectedly. Please try again.');
       return '';
     }

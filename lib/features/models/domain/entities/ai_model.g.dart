@@ -35,13 +35,15 @@ class AiModelAdapter extends TypeAdapter<AiModel> {
       etaSeconds: fields[15] as int?,
       contextLength: fields[16] as int,
       tags: (fields[17] as List).cast<String>(),
+      downloadReceivedBytes: fields[18] as int? ?? 0,
+      downloadTotalBytes: fields[19] as int? ?? 0,
     );
   }
 
   @override
   void write(BinaryWriter writer, AiModel obj) {
     writer
-      ..writeByte(18)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -77,7 +79,11 @@ class AiModelAdapter extends TypeAdapter<AiModel> {
       ..writeByte(16)
       ..write(obj.contextLength)
       ..writeByte(17)
-      ..write(obj.tags);
+      ..write(obj.tags)
+      ..writeByte(18)
+      ..write(obj.downloadReceivedBytes)
+      ..writeByte(19)
+      ..write(obj.downloadTotalBytes);
   }
 
   @override

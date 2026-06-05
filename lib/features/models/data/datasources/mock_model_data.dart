@@ -178,8 +178,8 @@ class MockModelData {
         description:
             'Qwen2.5 instruction model for coding and multilingual chat.',
         sizeGb: 4.68,
-        downloadUrl: 'https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF'
-            '/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf',
+        downloadUrl: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF'
+            '/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
         category: ModelCategory.coding,
         version: '2.5',
         releaseDate: DateTime(2024, 9, 19),
@@ -245,8 +245,8 @@ class MockModelData {
         description: 'General-purpose Mistral instruction model.',
         sizeGb: 4.37,
         downloadUrl:
-            'https://huggingface.co/macandchiz/Mistral-7B-Instruct-v0.3-GGUF'
-            '/resolve/main/mistral-7b-instruct-v0.3-q4_k_m.gguf',
+            'https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF'
+            '/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf',
         category: ModelCategory.instruct,
         version: '0.3',
         releaseDate: DateTime(2024, 5, 22),

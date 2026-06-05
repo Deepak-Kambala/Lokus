@@ -56,6 +56,10 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
       modelId: model.id,
       status: ModelStatus.downloading,
       progress: model.downloadProgress.clamp(0.0, 0.999).toDouble(),
+      speedMbps: 0.0,
+      etaSeconds: 0,
+      receivedBytes: model.downloadReceivedBytes,
+      totalBytes: model.downloadTotalBytes,
     );
     _updateState(model.id, ModelStatus.downloading);
 
@@ -68,6 +72,8 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
           progress: prog.progress,
           speedMbps: prog.speedMbps,
           etaSeconds: prog.etaSeconds,
+          receivedBytes: prog.receivedBytes,
+          totalBytes: prog.totalBytes,
         );
         _ref.read(modelsRefreshProvider.notifier).state++;
       },
@@ -77,6 +83,8 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
           status: ModelStatus.downloaded,
           progress: 1.0,
           localPath: localPath,
+          speedMbps: 0.0,
+          etaSeconds: 0,
         );
         _updateState(model.id, ModelStatus.downloaded);
         _ref.read(modelsRefreshProvider.notifier).state++;
@@ -91,6 +99,8 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
           progress: shouldResetProgress ? 0.0 : null,
           speedMbps: 0.0,
           etaSeconds: 0,
+          receivedBytes: shouldResetProgress ? 0 : null,
+          totalBytes: shouldResetProgress ? 0 : null,
         );
         _ref.read(downloadErrorsProvider.notifier).state = {
           ..._ref.read(downloadErrorsProvider),
@@ -104,7 +114,12 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
 
   void pauseDownload(String modelId) {
     _dl.pauseDownload(modelId);
-    _repo.updateModelStatus(modelId: modelId, status: ModelStatus.paused);
+    _repo.updateModelStatus(
+      modelId: modelId,
+      status: ModelStatus.paused,
+      speedMbps: 0.0,
+      etaSeconds: 0,
+    );
     _updateState(modelId, ModelStatus.paused);
     _ref.read(modelsRefreshProvider.notifier).state++;
   }
@@ -118,7 +133,17 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
   void cancelDownload(String modelId) {
     _dl.cancelDownload(modelId);
     _repo.updateModelStatus(
-        modelId: modelId, status: ModelStatus.available, progress: 0.0);
+      modelId: modelId,
+      status: ModelStatus.available,
+      progress: 0.0,
+      speedMbps: 0.0,
+      etaSeconds: 0,
+      receivedBytes: 0,
+      totalBytes: 0,
+    );
+    final errors = Map<String, String>.from(_ref.read(downloadErrorsProvider));
+    errors.remove(modelId);
+    _ref.read(downloadErrorsProvider.notifier).state = errors;
     _updateState(modelId, ModelStatus.available);
     _ref.read(modelsRefreshProvider.notifier).state++;
   }

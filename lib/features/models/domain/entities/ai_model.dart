@@ -89,6 +89,12 @@ class AiModel extends HiveObject {
   @HiveField(17)
   final List<String> tags;
 
+  @HiveField(18)
+  final int downloadReceivedBytes;
+
+  @HiveField(19)
+  final int downloadTotalBytes;
+
   AiModel({
     required this.id,
     required this.name,
@@ -108,6 +114,8 @@ class AiModel extends HiveObject {
     this.etaSeconds,
     required this.contextLength,
     required this.tags,
+    this.downloadReceivedBytes = 0,
+    this.downloadTotalBytes = 0,
   });
 
   String get sizeString {
@@ -149,6 +157,8 @@ class AiModel extends HiveObject {
     bool clearLocalPath = false,
     double? downloadSpeedMbps,
     int? etaSeconds,
+    int? downloadReceivedBytes,
+    int? downloadTotalBytes,
   }) {
     return AiModel(
       id: id,
@@ -169,6 +179,9 @@ class AiModel extends HiveObject {
       etaSeconds: etaSeconds ?? this.etaSeconds,
       contextLength: contextLength,
       tags: tags,
+      downloadReceivedBytes:
+          downloadReceivedBytes ?? this.downloadReceivedBytes,
+      downloadTotalBytes: downloadTotalBytes ?? this.downloadTotalBytes,
     );
   }
 }

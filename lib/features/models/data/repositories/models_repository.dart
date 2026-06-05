@@ -44,6 +44,10 @@ class ModelsRepository {
       final repaired = model?.copyWith(
         status: ModelStatus.available,
         downloadProgress: 0.0,
+        downloadSpeedMbps: 0.0,
+        etaSeconds: 0,
+        downloadReceivedBytes: 0,
+        downloadTotalBytes: 0,
         clearLocalPath: true,
       );
       if (repaired != null) {
@@ -119,6 +123,8 @@ class ModelsRepository {
           status: ModelStatus.downloaded,
           downloadProgress: 1.0,
           localPath: file.path,
+          downloadReceivedBytes: file.lengthSync(),
+          downloadTotalBytes: file.lengthSync(),
         ),
       );
     }
@@ -155,6 +161,10 @@ class ModelsRepository {
       final repaired = model.copyWith(
         status: ModelStatus.available,
         downloadProgress: 0.0,
+        downloadSpeedMbps: 0.0,
+        etaSeconds: 0,
+        downloadReceivedBytes: 0,
+        downloadTotalBytes: 0,
         clearLocalPath: true,
       );
       _box.put(model.id, repaired);
@@ -172,6 +182,8 @@ class ModelsRepository {
     String? localPath,
     double? speedMbps,
     int? etaSeconds,
+    int? receivedBytes,
+    int? totalBytes,
   }) async {
     final existing = _box.get(modelId);
     if (existing != null) {
@@ -181,6 +193,8 @@ class ModelsRepository {
         localPath: localPath,
         downloadSpeedMbps: speedMbps,
         etaSeconds: etaSeconds,
+        downloadReceivedBytes: receivedBytes,
+        downloadTotalBytes: totalBytes,
       );
       await _box.put(modelId, updated);
     } else {
@@ -195,6 +209,8 @@ class ModelsRepository {
           localPath: localPath,
           downloadSpeedMbps: speedMbps ?? 0.0,
           etaSeconds: etaSeconds,
+          downloadReceivedBytes: receivedBytes ?? 0,
+          downloadTotalBytes: totalBytes ?? 0,
         );
         await _box.put(modelId, updated);
       }
@@ -207,6 +223,10 @@ class ModelsRepository {
       final updated = model.copyWith(
         status: ModelStatus.available,
         downloadProgress: 0.0,
+        downloadSpeedMbps: 0.0,
+        etaSeconds: 0,
+        downloadReceivedBytes: 0,
+        downloadTotalBytes: 0,
         clearLocalPath: true,
       );
       await _box.put(modelId, updated);
