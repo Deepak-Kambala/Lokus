@@ -44,6 +44,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   bool _hasText = false;
   bool _isGenerating = false;
+  bool _isSending = false;
+  bool _isStopping = false;
   bool _isLoadingModel = false;
   bool _autoScrollWithStream = true;
   DateTime? _lastStreamScrollAt;
@@ -128,20 +130,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _sendMessage() async {
     final text = _inputCtrl.text.trim();
-    if (text.isEmpty || _isGenerating) return;
+    if (text.isEmpty || _isGenerating || _isSending) return;
+
+    _inputCtrl.clear();
+    setState(() {
+      _hasText = false;
+      _isSending = true;
+    });
+
+    var restoreInputOnFailure = true;
+    Future<void> restoreInput() async {
+      if (!restoreInputOnFailure || !mounted) return;
+      _inputCtrl.text = text;
+      _inputCtrl.selection = TextSelection.collapsed(offset: text.length);
+      setState(() {
+        _hasText = text.trim().isNotEmpty;
+        _isSending = false;
+      });
+    }
+
     await _waitForStopCleanup();
-    if (!mounted || _isGenerating) return;
+    if (!mounted || _isGenerating) {
+      await restoreInput();
+      return;
+    }
 
     final convo = ref
         .read(conversationsRepositoryProvider)
         .getById(widget.conversationId);
     if (convo == null) {
       _showSnack('Chat not found. Start a new chat.');
+      await restoreInput();
       return;
     }
 
     final activeModel = ref.read(activeModelProvider);
     if (activeModel != null && activeModel.id != convo.modelId) {
+      restoreInputOnFailure = false;
+      if (mounted) setState(() => _isSending = false);
       await _openNewChatForModel(activeModel, text);
       return;
     }
@@ -153,18 +179,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         model.localPath == null) {
       _showSnack('${convo.modelName} is missing. Download it again.');
       ref.read(modelsRefreshProvider.notifier).state++;
+      await restoreInput();
       return;
     }
 
     final ready = await _ensureModelLoaded(model);
-    if (!ready) return;
+    if (!ready) {
+      await restoreInput();
+      return;
+    }
 
-    _inputCtrl.clear();
     setState(() {
-      _hasText = false;
+      _isSending = false;
       _isGenerating = true;
       _autoScrollWithStream = true;
     });
+    restoreInputOnFailure = false;
     final runId = ++_generationRunId;
     _activeAssistantContent = '';
 
@@ -303,14 +333,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _stopGeneration() async {
-    if (!_isGenerating) {
+    if (!_isGenerating || _isStopping) {
       return;
     }
     await _stopGenerationInternal();
   }
 
   Future<void> _stopGenerationInternal() async {
-    if (!_isGenerating) return;
+    if (!_isGenerating || _isStopping) return;
 
     final assistantId = _activeAssistantId;
     final content = _activeAssistantContent;
@@ -323,6 +353,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (mounted) {
       setState(() {
         _isGenerating = false;
+        _isStopping = true;
       });
     }
 
@@ -334,6 +365,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     trackedCleanup = cleanup.catchError((_) {}).whenComplete(() {
       if (identical(_stopFuture, trackedCleanup)) {
         _stopFuture = null;
+      }
+      if (mounted) {
+        setState(() => _isStopping = false);
       }
     });
     _stopFuture = trackedCleanup;
@@ -621,6 +655,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildInputBar() {
+    final canSend = _hasText && !_isSending && !_isLoadingModel;
+
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.background,
@@ -675,7 +711,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ? AppTheme.surfaceHighlight
                   : _isGenerating
                       ? AppTheme.surfaceHighlight
-                      : _hasText
+                      : canSend
                           ? AppTheme.accent
                           : AppTheme.surface,
               borderRadius: BorderRadius.circular(10),
@@ -684,7 +720,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ? AppTheme.border
                     : _isGenerating
                         ? AppTheme.accent
-                        : _hasText
+                        : canSend
                             ? AppTheme.accent
                             : AppTheme.border,
               ),
@@ -706,11 +742,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         icon: Icon(
                           Icons.arrow_upward_rounded,
                           size: 16,
-                          color: _hasText
+                          color: canSend
                               ? AppTheme.onAccent
                               : AppTheme.textTertiary,
                         ),
-                        onPressed: _hasText ? _sendMessage : null,
+                        onPressed: canSend ? _sendMessage : null,
                         padding: EdgeInsets.zero,
                       ),
           ),
