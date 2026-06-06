@@ -7,6 +7,7 @@ import '../../../../core/constants/hive_constants.dart';
 import '../../../../services/inference_service.dart';
 import '../../../../services/storage_service.dart';
 import '../../../conversations/providers/conversations_provider.dart';
+import '../../../models/data/repositories/models_repository.dart';
 import '../../../models/providers/models_provider.dart';
 import '../../../models/domain/entities/ai_model.dart';
 import '../../widgets/conversation_drawer.dart';
@@ -37,9 +38,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await ref
           .read(conversationsRepositoryProvider)
           .removeEmptyConversations();
-      await ref.read(storageServiceProvider).clearSelectedModel();
-      ref.read(activeModelProvider.notifier).state = null;
-      await ref.read(inferenceServiceProvider).unloadModel();
+      await _restoreSelectedModel();
       ref.read(conversationsRefreshProvider.notifier).state++;
     });
   }
@@ -180,12 +179,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _startNewChat() async {
     await ref.read(conversationsRepositoryProvider).removeEmptyConversations();
-    await ref.read(storageServiceProvider).clearSelectedModel();
-    ref.read(activeModelProvider.notifier).state = null;
-    await ref.read(inferenceServiceProvider).unloadModel();
     ref.read(conversationsRefreshProvider.notifier).state++;
     _inputController.clear();
     if (mounted) setState(() => _hasText = false);
+  }
+
+  Future<void> _restoreSelectedModel() async {
+    final selectedModelId = ref.read(storageServiceProvider).selectedModelId;
+    if (selectedModelId == null || selectedModelId.isEmpty) return;
+
+    final model = ref.read(modelsRepositoryProvider).getModelById(
+          selectedModelId,
+        );
+    if (model == null ||
+        model.status != ModelStatus.downloaded ||
+        model.localPath == null) {
+      await ref.read(storageServiceProvider).clearSelectedModel();
+      ref.read(activeModelProvider.notifier).state = null;
+      await ref.read(inferenceServiceProvider).unloadModel();
+      return;
+    }
+
+    ref.read(activeModelProvider.notifier).state = model;
   }
 
   void _startWithPrompt(String prompt) {

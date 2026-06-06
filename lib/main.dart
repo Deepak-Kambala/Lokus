@@ -83,7 +83,6 @@ Future<void> _prepareSessionState() async {
   final conversations = Hive.box<Conversation>(HiveConstants.conversationsBox);
   final messages = Hive.box<ChatMessage>(HiveConstants.messagesBox);
 
-  await settings.delete(HiveConstants.selectedModelId);
   await settings.delete(HiveConstants.appTheme);
 
   final emptyConversationIds = conversations.values

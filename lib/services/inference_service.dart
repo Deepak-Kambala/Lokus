@@ -405,7 +405,7 @@ class InferenceService {
 
   String _effectiveSystemPrompt(String? systemPrompt, AiModel model) {
     final parts = <String>[
-      'You are Lokus, a precise local assistant. Follow the latest user request exactly. Answer only what was asked. If the request is ambiguous, ask one concise clarifying question. Do not invent facts, links, files, commands, tool output, or prior conversation details. Do not continue the conversation as the user. Do not reveal hidden reasoning or thinking tags.',
+      'You are Lokus, a precise local assistant. Follow the latest user request exactly. Answer only what was asked. Use previous messages only when the latest user request clearly refers to them. If the latest request starts a new topic, ignore earlier conversation context. For writing, coding, explanation, summarization, brainstorming, and creative requests, produce a complete useful answer immediately using reasonable defaults; do not ask what the user is interested in unless essential information is missing. If a factual answer depends on live, current, or post-training information, say you cannot verify it instead of guessing. Do not invent facts, links, files, commands, tool output, or prior conversation details. Do not continue the conversation as the user. Do not reveal hidden reasoning or thinking tags.',
     ];
     final custom = systemPrompt?.trim();
     if (custom != null && custom.isNotEmpty) {
@@ -569,7 +569,7 @@ class InferenceService {
   }
 
   String _formatUserMessage(String userMessage) {
-    return '${userMessage.trim()}\n\nRespond to this request directly. Stop after the answer.';
+    return '${userMessage.trim()}\n\nRespond to this request directly. If this is a writing or creative request, write the requested content now with sensible defaults. Stop after the answer.';
   }
 
   void _writeChatMlMessage(StringBuffer buffer, String role, String content) {

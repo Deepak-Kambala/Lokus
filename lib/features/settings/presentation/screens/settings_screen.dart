@@ -186,7 +186,7 @@ class SettingsScreen extends ConsumerWidget {
           'Lokus runs downloaded GGUF models on your device. Chats, selected folders, model files, and exports stay in local storage unless you manually share them.',
         ),
         _InfoParagraph(
-          'The app uses the internet only to download model files from the model source you choose. Prompts and responses are not sent to a Lokus server.',
+          'The app uses the internet to download model files and to retrieve web snippets for current factual questions. Prompts and responses are not sent to a Lokus server.',
         ),
         _InfoParagraph(
           'If you export chats, the JSON file is saved inside your selected storage folder. Delete that file when you no longer need it.',
@@ -214,7 +214,7 @@ class SettingsScreen extends ConsumerWidget {
         _FaqItem(
           question: 'Can I use Lokus offline?',
           answer:
-              'Yes. After the model is downloaded, chat runs offline. Internet is only needed for downloading models.',
+              'Yes. After the model is downloaded, normal chat runs offline. Current factual questions need internet access for web grounding.',
         ),
         _FaqItem(
           question: 'Where are my chats stored?',

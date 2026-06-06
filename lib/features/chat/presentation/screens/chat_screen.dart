@@ -11,6 +11,7 @@ import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/constants/hive_constants.dart';
 import '../../../../services/inference_service.dart';
 import '../../../../services/storage_service.dart';
+import '../../../../services/web_grounding_service.dart';
 import '../../../conversations/providers/conversations_provider.dart';
 import '../../../chat/domain/entities/chat_message.dart';
 import '../../../models/data/repositories/models_repository.dart';
@@ -20,6 +21,10 @@ import '../../domain/entities/conversation.dart';
 import '../../../home/widgets/conversation_drawer.dart';
 import '../../../home/widgets/model_selector_button.dart';
 import '../../../home/widgets/new_chat_button.dart';
+
+final _webGroundingServiceProvider = Provider<WebGroundingService>((ref) {
+  return WebGroundingService();
+});
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String conversationId;
@@ -242,12 +247,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     final history = ref.read(messagesProvider(widget.conversationId));
+    final baseSystemPrompt = _systemPromptForLanguage(convo.systemPrompt);
+    var systemPrompt = baseSystemPrompt;
+    final grounding = await ref.read(_webGroundingServiceProvider).ground(text);
+    if (!_isRunActive(runId)) {
+      await _finalizeInterruptedMessage(assistantId, assistantMsg);
+      return;
+    }
+    if (grounding != null) {
+      if (!grounding.hasSources) {
+        await ref
+            .read(messagesProvider(widget.conversationId).notifier)
+            .updateMessage(assistantMsg.copyWith(
+              content:
+                  'I could not verify this with current web sources right now, so I should not guess.',
+              isStreaming: false,
+              isError: false,
+            ));
+        _activeAssistantId = null;
+        _activeAssistantContent = '';
+        if (mounted) setState(() => _isGenerating = false);
+        _scrollToBottom(force: true);
+        return;
+      }
+      systemPrompt = _systemPromptWithGrounding(baseSystemPrompt, grounding);
+    }
 
     final inference = ref.read(inferenceServiceProvider);
     final stream = inference.generateStream(
-      history: _compactHistoryForPrompt(history, userMsg.id),
+      history: _compactHistoryForPrompt(history, userMsg.id, text),
       userMessage: text,
-      systemPrompt: _systemPromptForLanguage(convo.systemPrompt),
+      systemPrompt: systemPrompt,
     );
 
     String accumulated = '';
@@ -524,6 +554,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   List<ChatMessage> _compactHistoryForPrompt(
     List<ChatMessage> history,
     String currentUserMessageId,
+    String currentUserMessage,
   ) {
     const maxMessages = 16;
     const maxTotalChars = 5200;
@@ -536,6 +567,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             !m.isError &&
             m.content.trim().isNotEmpty)
         .toList();
+
+    if (!_shouldUsePriorContext(currentUserMessage, eligible)) {
+      return const [];
+    }
 
     final selected = <ChatMessage>[];
     var usedChars = 0;
@@ -560,6 +595,144 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return selected.reversed.toList();
   }
 
+  bool _shouldUsePriorContext(
+    String currentUserMessage,
+    List<ChatMessage> history,
+  ) {
+    if (history.isEmpty) return false;
+
+    final text = currentUserMessage.trim();
+    final lower = text.toLowerCase();
+
+    final explicitReset = RegExp(
+      r'\b(new topic|different topic|different question|unrelated|ignore (the )?(previous|above|earlier)|forget (the )?(previous|above|earlier)|start over|fresh question)\b',
+      caseSensitive: false,
+    );
+    if (explicitReset.hasMatch(lower)) return false;
+
+    final explicitReference = RegExp(
+      r'\b(this|that|these|those|it|its|they|them|above|previous|earlier|same|continue|explain more|expand|summarize|rewrite|make it|change it|fix it|why|how so|what about)\b',
+      caseSensitive: false,
+    );
+    if (explicitReference.hasMatch(lower) && _wordCount(text) <= 18) {
+      return true;
+    }
+
+    final currentKeywords = _topicKeywords(text);
+    if (currentKeywords.length < 2) {
+      return _wordCount(text) <= 8 && explicitReference.hasMatch(lower);
+    }
+
+    final recentUserMessages = history
+        .where((m) => m.role == MessageRole.user)
+        .toList(growable: false)
+        .reversed
+        .take(4);
+
+    var bestOverlap = 0.0;
+    for (final message in recentUserMessages) {
+      final previousKeywords = _topicKeywords(message.content);
+      if (previousKeywords.isEmpty) continue;
+      final overlap = _keywordOverlap(currentKeywords, previousKeywords);
+      if (overlap > bestOverlap) bestOverlap = overlap;
+    }
+
+    if (bestOverlap >= 0.20) return true;
+
+    final recentAssistantMessages = history
+        .where((m) => m.role == MessageRole.assistant)
+        .toList(growable: false)
+        .reversed
+        .take(2);
+    for (final message in recentAssistantMessages) {
+      final previousKeywords = _topicKeywords(message.content);
+      if (_keywordOverlap(currentKeywords, previousKeywords) >= 0.24) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  Set<String> _topicKeywords(String text) {
+    final normalized = text.toLowerCase();
+    final matches = RegExp(r"[a-z0-9][a-z0-9_+\-.'/#]{2,}").allMatches(
+      normalized,
+    );
+    final keywords = <String>{};
+    for (final match in matches) {
+      final token = match.group(0);
+      if (token == null) continue;
+      final cleaned = token.replaceAll(RegExp(r"^['.]+|['.]+$"), '');
+      if (cleaned.length < 3 || _contextStopWords.contains(cleaned)) continue;
+      keywords.add(cleaned);
+    }
+    return keywords;
+  }
+
+  double _keywordOverlap(Set<String> current, Set<String> previous) {
+    if (current.isEmpty || previous.isEmpty) return 0.0;
+    final intersection = current.intersection(previous).length;
+    return intersection / current.length;
+  }
+
+  int _wordCount(String text) {
+    return RegExp(r'\S+').allMatches(text.trim()).length;
+  }
+
+  static const Set<String> _contextStopWords = {
+    'about',
+    'after',
+    'again',
+    'also',
+    'answer',
+    'because',
+    'before',
+    'best',
+    'can',
+    'chat',
+    'code',
+    'could',
+    'create',
+    'current',
+    'does',
+    'explain',
+    'from',
+    'give',
+    'help',
+    'how',
+    'into',
+    'make',
+    'need',
+    'please',
+    'question',
+    'request',
+    'same',
+    'show',
+    'tell',
+    'that',
+    'the',
+    'their',
+    'them',
+    'then',
+    'there',
+    'these',
+    'thing',
+    'this',
+    'those',
+    'use',
+    'using',
+    'want',
+    'what',
+    'when',
+    'where',
+    'which',
+    'with',
+    'would',
+    'write',
+    'your',
+  };
+
   String _friendlyGenerationError(Object error) {
     final text = error.toString().replaceFirst('Exception: ', '').trim();
     if (text.contains('The model returned no text')) {
@@ -583,13 +756,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
     if (language == 'Auto') {
       parts.add(
-        'Reply in English. Answer directly. Do not reveal hidden reasoning, chain-of-thought, internal thoughts, thinking notes, or <think> sections.',
+        'Reply in English. Answer directly. For writing or creative requests, produce the requested content immediately with sensible defaults instead of asking what to write about. Do not reveal hidden reasoning, chain-of-thought, internal thoughts, thinking notes, or <think> sections.',
       );
     } else {
       parts.add(
-        'Reply in $language. Answer directly. Do not reveal hidden reasoning, chain-of-thought, internal thoughts, thinking notes, or <think> sections.',
+        'Reply in $language. Answer directly. For writing or creative requests, produce the requested content immediately with sensible defaults instead of asking what to write about. Do not reveal hidden reasoning, chain-of-thought, internal thoughts, thinking notes, or <think> sections.',
       );
     }
+    return parts.join('\n\n');
+  }
+
+  String _systemPromptWithGrounding(
+    String? basePrompt,
+    WebGroundingResult grounding,
+  ) {
+    final parts = <String>[
+      if (basePrompt != null && basePrompt.trim().isNotEmpty) basePrompt.trim(),
+      'Current web source context is available for this answer. Use it for factual claims. Answer from the sources when they support the answer, mention uncertainty when they do not, and do not make up unsupported details. Include short source names in the answer when useful.',
+      grounding.toPromptContext(),
+    ];
     return parts.join('\n\n');
   }
 
@@ -757,9 +942,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _newChat() async {
     await ref.read(conversationsRepositoryProvider).removeEmptyConversations();
-    await ref.read(storageServiceProvider).clearSelectedModel();
-    ref.read(activeModelProvider.notifier).state = null;
-    await ref.read(inferenceServiceProvider).unloadModel();
     ref.read(conversationsRefreshProvider.notifier).state++;
 
     if (mounted) context.go('/home');
