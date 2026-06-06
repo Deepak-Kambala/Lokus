@@ -12,50 +12,163 @@ final inferenceServiceProvider = Provider<InferenceService>((ref) {
   return InferenceService();
 });
 
+class EmptyGenerationException implements Exception {
+  final String message;
+  const EmptyGenerationException([
+    this.message = 'The model returned no text. Please try again.',
+  ]);
+
+  @override
+  String toString() => message;
+}
+
 class InferenceService {
+  static const int _defaultContextSize = 2048;
+
   final FlutterLlama _llama = FlutterLlama.instance;
   AiModel? _loadedModel;
   bool _isLoading = false;
   int _generationEpoch = 0;
   bool _stopRequested = false;
+  int _loadedContextSize = _defaultContextSize;
+  String? _lastErrorMessage;
 
   bool get isModelLoaded => _loadedModel != null;
   AiModel? get loadedModel => _loadedModel;
   bool get isLoading => _isLoading;
+  String? get lastErrorMessage => _lastErrorMessage;
 
   Future<bool> loadModel(AiModel model) async {
-    if (model.localPath == null) return false;
-    final modelFile = File(model.localPath!);
-    if (!await modelFile.exists()) {
-      AppLog.debug('[Inference] Load failed: file not found for ${model.id}');
-      return false;
+    _lastErrorMessage = null;
+    final path = model.localPath;
+    if (path == null) {
+      return _failLoad(
+        model: model,
+        path: null,
+        fileSize: 0,
+        message: 'Model path is missing. Download the model again.',
+      );
     }
-    if (!await _looksLikeGguf(modelFile)) {
-      AppLog.debug('[Inference] Load failed: invalid GGUF file ${model.id}');
-      return false;
+
+    final modelFile = File(path);
+    var fileSize = 0;
+    try {
+      final exists = await modelFile.exists();
+      fileSize = exists ? await modelFile.length() : 0;
+      if (!exists || fileSize <= 1024 * 1024) {
+        return _failLoad(
+          model: model,
+          path: path,
+          fileSize: fileSize,
+          message: exists
+              ? 'Model file is too small or incomplete.'
+              : 'Model file was not found.',
+        );
+      }
+
+      final handle = await modelFile.open();
+      await handle.close();
+    } catch (e, stackTrace) {
+      AppLog.error(
+        _diagnosticMessage(
+          '[Inference] Model file validation failed for ${model.id}',
+          path: path,
+          fileSize: fileSize,
+          exception: e,
+        ),
+        e,
+        stackTrace,
+      );
+      return _failLoad(
+        model: model,
+        path: path,
+        fileSize: fileSize,
+        message: 'Cannot read model file: $e',
+      );
     }
 
     _isLoading = true;
     try {
-      final ok = await _llama.loadModel(
+      final configs = [
         LlamaConfig(
-          modelPath: model.localPath!,
-          nThreads: 2,
+          modelPath: path,
+          nThreads: 4,
           nGpuLayers: 0,
-          contextSize: 2048,
-          batchSize: 64,
+          contextSize: 512,
+          batchSize: 256,
+          useGpu: false,
         ),
-      );
-      if (!ok) {
-        _loadedModel = null;
-        return false;
+        LlamaConfig(
+          modelPath: path,
+          nThreads: 4,
+          nGpuLayers: 0,
+          contextSize: 256,
+          batchSize: 256,
+          useGpu: false,
+        ),
+      ];
+
+      for (var i = 0; i < configs.length; i++) {
+        try {
+          final ok = await _llama.loadModel(configs[i]);
+          if (ok) {
+            _loadedModel = model;
+            _loadedContextSize = configs[i].contextSize;
+            AppLog.debug('[Inference] Loaded: ${model.id}');
+            return true;
+          }
+          AppLog.debug(
+            _diagnosticMessage(
+              '[Inference] Load attempt ${i + 1} failed for ${model.id}',
+              path: path,
+              fileSize: fileSize,
+              exception: 'loadModel returned false',
+            ),
+          );
+        } catch (e, stackTrace) {
+          AppLog.error(
+            _diagnosticMessage(
+              '[Inference] Load attempt ${i + 1} failed for ${model.id}',
+              path: path,
+              fileSize: fileSize,
+              exception: e,
+            ),
+            e,
+            stackTrace,
+          );
+          _lastErrorMessage = 'Failed to load model: $e';
+        }
+        await _llama.unloadModel().catchError(
+          (Object e, StackTrace stackTrace) {
+            AppLog.error(
+              _diagnosticMessage(
+                '[Inference] Cleanup after load failure failed for ${model.id}',
+                path: path,
+                fileSize: fileSize,
+                exception: e,
+              ),
+              e,
+              stackTrace,
+            );
+          },
+        );
       }
-      _loadedModel = model;
-      AppLog.debug('[Inference] Loaded: ${model.id}');
-      return true;
-    } catch (e, stackTrace) {
-      AppLog.error('[Inference] Load failed for ${model.id}', e, stackTrace);
       _loadedModel = null;
+      _lastErrorMessage ??= 'Failed to load model on this device.';
+      return false;
+    } catch (e, stackTrace) {
+      AppLog.error(
+        _diagnosticMessage(
+          '[Inference] Load failed for ${model.id}',
+          path: path,
+          fileSize: fileSize,
+          exception: e,
+        ),
+        e,
+        stackTrace,
+      );
+      _loadedModel = null;
+      _lastErrorMessage = 'Failed to load model: $e';
       return false;
     } finally {
       _isLoading = false;
@@ -76,6 +189,10 @@ class InferenceService {
     final epoch = ++_generationEpoch;
     _stopRequested = false;
     final model = _loadedModel!;
+    final modelFile = model.localPath == null ? null : File(model.localPath!);
+    final fileSize = modelFile != null && await modelFile.exists()
+        ? await modelFile.length()
+        : 0;
     final prompt = _buildPrompt(
       history: history,
       userMessage: userMessage,
@@ -83,41 +200,111 @@ class InferenceService {
       model: model,
     );
 
-    var raw = '';
-    var emitted = '';
-    try {
-      await for (final token in _llama.generateStream(
-        GenerationParams(
-          prompt: prompt,
-          maxTokens: maxTokens,
-          temperature: temperature <= 0 ? 0.8 : temperature,
-          topP: 0.95,
-          topK: 50,
-          repeatPenalty: 1.1,
-          stopSequences: _stopSequencesFor(model),
-        ),
-      )) {
-        if (_stopRequested || epoch != _generationEpoch) {
-          break;
+    final temperatures = [temperature <= 0 ? 0.8 : temperature, 0.1];
+    for (var attempt = 0; attempt < temperatures.length; attempt++) {
+      var raw = '';
+      var emitted = '';
+      try {
+        await for (final token in _llama.generateStream(
+          GenerationParams(
+            prompt: prompt,
+            maxTokens: maxTokens,
+            temperature: temperatures[attempt],
+            topP: 0.95,
+            topK: 50,
+            repeatPenalty: 1.1,
+            stopSequences: _stopSequencesFor(model),
+          ),
+        )) {
+          if (_stopRequested || epoch != _generationEpoch) {
+            break;
+          }
+          raw += token;
+          final cleaned = _cleanResponse(raw, model);
+          if (cleaned.length > emitted.length) {
+            final next = cleaned.substring(emitted.length);
+            emitted = cleaned;
+            yield next;
+          }
+          if (_containsStopSequence(raw, model)) {
+            await _llama.stopGeneration();
+            break;
+          }
         }
 
-        raw += token;
-        final cleaned = _cleanResponse(raw, model);
-        if (cleaned.length > emitted.length) {
-          final next = cleaned.substring(emitted.length);
-          emitted = cleaned;
-          yield next;
+        if (_stopRequested || epoch != _generationEpoch) {
+          AppLog.debug(
+            _diagnosticMessage(
+              '[Inference] Generation interrupted for ${model.id}',
+              path: model.localPath,
+              fileSize: fileSize,
+              exception: 'interrupted',
+            ),
+          );
+          return;
         }
-        if (_containsStopSequence(raw, model)) {
+
+        if (emitted.trim().isNotEmpty) {
+          return;
+        }
+
+        AppLog.debug(
+          _diagnosticMessage(
+            '[Inference] Empty generation attempt ${attempt + 1} for ${model.id}',
+            path: model.localPath,
+            fileSize: fileSize,
+            exception: 'empty response',
+          ),
+        );
+      } catch (e, stackTrace) {
+        AppLog.error(
+          _diagnosticMessage(
+            '[Inference] Generate attempt ${attempt + 1} failed for ${model.id}',
+            path: model.localPath,
+            fileSize: fileSize,
+            exception: e,
+          ),
+          e,
+          stackTrace,
+        );
+      } finally {
+        if (!_stopRequested && epoch == _generationEpoch) {
           await _llama.stopGeneration();
-          break;
         }
-      }
-    } finally {
-      if (_stopRequested || epoch != _generationEpoch) {
-        await _llama.stopGeneration();
       }
     }
+
+    yield 'The model returned no text. Try rephrasing your message.';
+  }
+
+  bool _failLoad({
+    required AiModel model,
+    required String? path,
+    required int fileSize,
+    required String message,
+  }) {
+    _loadedModel = null;
+    _lastErrorMessage = message;
+    AppLog.debug(
+      _diagnosticMessage(
+        '[Inference] Load failed for ${model.id}',
+        path: path,
+        fileSize: fileSize,
+        exception: message,
+      ),
+    );
+    return false;
+  }
+
+  String _diagnosticMessage(
+    String prefix, {
+    required String? path,
+    required int fileSize,
+    required Object exception,
+  }) {
+    return '$prefix: os=${Platform.operatingSystemVersion}, '
+        'modelPath=${path ?? 'null'}, fileSize=$fileSize, '
+        'rss=${ProcessInfo.currentRss}, exception=$exception';
   }
 
   Future<void> stopGeneration() async {
@@ -135,6 +322,7 @@ class InferenceService {
       AppLog.error('[Inference] Unload warning', e, stackTrace);
     } finally {
       _loadedModel = null;
+      _loadedContextSize = _defaultContextSize;
     }
   }
 
@@ -148,33 +336,72 @@ class InferenceService {
     required AiModel model,
     String? systemPrompt,
   }) {
+    final boundedHistory = _recentHistoryForContext(
+      history: history,
+      userMessage: userMessage,
+      systemPrompt: systemPrompt,
+    );
     final id = model.id.toLowerCase();
     if (id.contains('llama')) {
       return _buildLlamaPrompt(
-        history: history,
+        history: boundedHistory,
         userMessage: userMessage,
         systemPrompt: systemPrompt,
       );
     }
     if (id.contains('gemma')) {
       return _buildGemmaPrompt(
-        history: history,
+        history: boundedHistory,
         userMessage: userMessage,
         systemPrompt: systemPrompt,
       );
     }
     if (id.contains('mistral')) {
       return _buildMistralPrompt(
-        history: history,
+        history: boundedHistory,
         userMessage: userMessage,
         systemPrompt: systemPrompt,
       );
     }
     return _buildChatMlPrompt(
-      history: history,
+      history: boundedHistory,
       userMessage: userMessage,
       systemPrompt: systemPrompt,
     );
+  }
+
+  List<ChatMessage> _recentHistoryForContext({
+    required List<ChatMessage> history,
+    required String userMessage,
+    String? systemPrompt,
+  }) {
+    final usableChars = (_loadedContextSize * 3).clamp(1200, 12000);
+    final reserved = userMessage.length + (systemPrompt?.length ?? 0) + 800;
+    var remaining = (usableChars - reserved).clamp(0, usableChars);
+    final selected = <ChatMessage>[];
+    final candidates = history
+        .where((m) => !m.isStreaming && m.content.trim().isNotEmpty)
+        .toList(growable: false);
+
+    for (final message in candidates.reversed) {
+      final cost = message.content.length + 80;
+      if (selected.isNotEmpty && cost > remaining) break;
+      if (cost > remaining && selected.isEmpty) {
+        selected.add(message);
+        break;
+      }
+      selected.add(message);
+      remaining -= cost;
+    }
+
+    selected.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    if (selected.length != candidates.length) {
+      AppLog.debug(
+        '[Inference] Trimmed chat history for context: '
+        '${candidates.length} -> ${selected.length}, context=$_loadedContextSize',
+      );
+    }
+    return selected;
   }
 
   String _buildChatMlPrompt({
@@ -321,7 +548,7 @@ class InferenceService {
   }
 
   String _cleanResponse(String text, AiModel model) {
-    var cleaned = _stripThinking(text);
+    var cleaned = _stripSpecialTokens(_stripThinking(text));
     for (final stop in _stopSequencesFor(model)) {
       final index = cleaned.indexOf(stop);
       if (index >= 0) {
@@ -336,6 +563,7 @@ class InferenceService {
         .replaceFirst(
             RegExp(r'^\s*<\|start_header_id\|>assistant<\|end_header_id\|>\s*'),
             '');
+    cleaned = _stripSpecialTokens(cleaned);
     return cleaned.trimLeft();
   }
 
@@ -379,18 +607,22 @@ class InferenceService {
     return cleaned;
   }
 
-  Future<bool> _looksLikeGguf(File file) async {
-    final raf = await file.open();
-    try {
-      if (await raf.length() < 4) return false;
-      final bytes = await raf.read(4);
-      return bytes.length == 4 &&
-          bytes[0] == 0x47 &&
-          bytes[1] == 0x47 &&
-          bytes[2] == 0x55 &&
-          bytes[3] == 0x46;
-    } finally {
-      await raf.close();
-    }
+  String _stripSpecialTokens(String text) {
+    return text
+        .replaceAll(
+          RegExp(
+            r'<\|[^|]+?\|>|<s>|</s>|<pad>|<bos>|<eos>|<unk>',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceAll(
+          RegExp(
+            r'<start_of_turn>|<end_of_turn>|<start_header_id>|<end_header_id>',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .trimLeft();
   }
 }

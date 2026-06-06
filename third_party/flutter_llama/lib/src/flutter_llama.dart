@@ -17,6 +17,7 @@ class FlutterLlama {
   bool _isModelLoaded = false;
   String? _modelPath;
   Future<void>? _activeStreamDone;
+  int _streamRequestId = 0;
 
   FlutterLlama._();
 
@@ -126,6 +127,7 @@ class FlutterLlama {
 
     final controller = StreamController<String>();
     const eventChannel = EventChannel('flutter_llama/stream');
+    final requestId = ++_streamRequestId;
     StreamSubscription? tokenSub;
     var closed = false;
     var canceled = false;
@@ -138,9 +140,24 @@ class FlutterLlama {
 
     controller.onListen = () {
       tokenSub = eventChannel.receiveBroadcastStream().listen(
-        (token) {
-          if (!controller.isClosed && token is String) {
-            controller.add(token);
+        (event) {
+          if (controller.isClosed) return;
+          if (event is String) {
+            controller.add(event);
+            return;
+          }
+          if (event is Map) {
+            final eventRequestId = event['requestId'];
+            if (eventRequestId != requestId) return;
+
+            final token = event['token'];
+            if (token is String) {
+              controller.add(token);
+              return;
+            }
+            if (event['done'] == true) {
+              closeOnce();
+            }
           }
         },
         onError: (Object error, StackTrace stackTrace) {
@@ -157,15 +174,20 @@ class FlutterLlama {
         final active = _activeStreamDone;
         if (active != null) {
           await active.timeout(
-            const Duration(milliseconds: 800),
+            const Duration(seconds: 2),
             onTimeout: () {},
           );
         }
         if (canceled || controller.isClosed) return;
 
-        final call = _channel
-            .invokeMethod<void>('generateStream', params.toMap())
-            .whenComplete(closeOnce);
+        final args = {
+          ...params.toMap(),
+          'requestId': requestId,
+        };
+        final call =
+            _channel.invokeMethod<void>('generateStream', args).whenComplete(
+                  closeOnce,
+                );
         _activeStreamDone = call;
 
         try {
@@ -239,6 +261,13 @@ class FlutterLlama {
   Future<void> stopGeneration() async {
     try {
       await _channel.invokeMethod<void>('stopGeneration');
+      final active = _activeStreamDone;
+      if (active != null) {
+        await active.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {},
+        );
+      }
     } catch (e) {
       if (kDebugMode) {
         print('[FlutterLlama] Error stopping generation: $e');

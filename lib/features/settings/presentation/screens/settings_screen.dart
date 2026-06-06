@@ -28,8 +28,10 @@ class SettingsScreen extends ConsumerWidget {
     final folderPath = storageService.storageFolderPath ?? 'Not set';
     final language = storageService.getSetting<String>(
       HiveConstants.appLanguage,
-      defaultValue: 'Auto',
+      defaultValue: 'English (United States)',
     );
+    final displayLanguage =
+        language == 'Auto' ? 'English (United States)' : language;
     final activePrompt = storageService.getSetting<String>(
       HiveConstants.activeSystemPromptTitle,
       defaultValue: 'None',
@@ -83,7 +85,7 @@ class SettingsScreen extends ConsumerWidget {
           _SettingsTile(
             icon: Icons.language_rounded,
             title: 'Response Language',
-            subtitle: language,
+            subtitle: displayLanguage,
             onTap: () => _showLanguageSheet(context, ref),
           ),
           _SectionHeader('INFO'),
@@ -232,7 +234,7 @@ class SettingsScreen extends ConsumerWidget {
         _FaqItem(
           question: 'Which language should I select?',
           answer:
-              'Use Auto to match your prompt language. Select a specific language when you want every response in that language.',
+              'English is the default response language. Select another language when you want every response in that language.',
         ),
         _FaqItem(
           question: 'Why do answers sometimes stop early?',
@@ -1132,7 +1134,6 @@ class _LanguageSheet extends StatelessWidget {
   const _LanguageSheet({required this.ref});
 
   static const _languages = [
-    'Auto',
     'English (United States)',
     'English (United Kingdom)',
     'Hindi (India)',
@@ -1156,8 +1157,10 @@ class _LanguageSheet extends StatelessWidget {
     final storage = ref.read(storageServiceProvider);
     final selected = storage.getSetting<String>(
       HiveConstants.appLanguage,
-      defaultValue: 'Auto',
+      defaultValue: 'English (United States)',
     );
+    final selectedLanguage =
+        selected == 'Auto' ? 'English (United States)' : selected;
 
     return SafeArea(
       child: Container(
@@ -1194,12 +1197,9 @@ class _LanguageSheet extends StatelessWidget {
                 itemCount: _languages.length,
                 itemBuilder: (context, index) {
                   final language = _languages[index];
-                  final isSelected = language == selected;
+                  final isSelected = language == selectedLanguage;
                   return ListTile(
                     title: Text(language),
-                    subtitle: language == 'Auto'
-                        ? Text('Use the same language as the prompt')
-                        : null,
                     trailing: isSelected
                         ? Icon(Icons.check_rounded, color: AppTheme.accent)
                         : null,

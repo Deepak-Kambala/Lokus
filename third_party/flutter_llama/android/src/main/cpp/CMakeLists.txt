@@ -57,6 +57,9 @@ target_include_directories(flutter_llama_bridge PRIVATE
 # Link with llama.cpp libraries
 target_link_libraries(flutter_llama_bridge
     llama
+    ggml
+    ggml-base
+    ggml-cpu
     ${log-lib}
     ${android-lib}
 )

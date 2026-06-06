@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -127,11 +128,39 @@ void _recordFatalError(Object error, StackTrace? stackTrace) {
   }
 }
 
-class LokusApp extends ConsumerWidget {
+class LokusApp extends ConsumerStatefulWidget {
   const LokusApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LokusApp> createState() => _LokusAppState();
+}
+
+class _LokusAppState extends ConsumerState<LokusApp> {
+  bool _showSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Timer(const Duration(milliseconds: 900), () {
+      if (mounted) {
+        setState(() => _showSplash = false);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showSplash) {
+      return MaterialApp(
+        title: 'Lokus',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.dark,
+        home: const _SplashScreen(),
+      );
+    }
+
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
@@ -141,6 +170,48 @@ class LokusApp extends ConsumerWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark,
       routerConfig: router,
+    );
+  }
+}
+
+class _SplashScreen extends StatelessWidget {
+  const _SplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceElevated,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Center(
+                child: SvgPicture.asset(
+                  'assets/images/splash_logo.svg',
+                  width: 68,
+                  height: 68,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Lokus',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

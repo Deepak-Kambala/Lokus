@@ -11,6 +11,7 @@
 #include <mutex>
 #include <chrono>
 #include <algorithm>
+#include <cstdio>
 #include <android/log.h>
 
 #define LOG_TAG "FlutterLlamaBridge"
@@ -31,6 +32,32 @@ static int g_stream_n_pos = 0;
 static int g_stream_max_tokens = 0;
 static int g_stream_generated = 0;
 static bool g_stream_done = false;
+static std::string g_last_error;
+
+static void set_last_error(const std::string& message) {
+    g_last_error = message;
+    LOGE("%s", message.c_str());
+}
+
+static void throw_java_exception(JNIEnv* env, const std::string& message) {
+    set_last_error(message);
+    jclass exception_class = env->FindClass("java/lang/IllegalStateException");
+    if (exception_class) {
+        env->ThrowNew(exception_class, message.c_str());
+    }
+}
+
+static std::string format_error(const char* format, const char* value) {
+    char buffer[1024] = {0};
+    std::snprintf(buffer, sizeof(buffer), format, value);
+    return std::string(buffer);
+}
+
+static std::string format_error(const char* format, int first, int second) {
+    char buffer[1024] = {0};
+    std::snprintf(buffer, sizeof(buffer), format, first, second);
+    return std::string(buffer);
+}
 
 static uint32_t new_seed() {
     return (uint32_t) std::chrono::high_resolution_clock::now()
@@ -99,6 +126,52 @@ static jstring safe_new_string_utf(JNIEnv* env, const std::string& value) {
     return env->NewStringUTF(sanitized.c_str());
 }
 
+static bool token_to_piece(llama_token token, std::string& out) {
+    if (!g_vocab) {
+        return false;
+    }
+
+    char stack_buffer[256] = {0};
+    int n = llama_token_to_piece(
+        g_vocab,
+        token,
+        stack_buffer,
+        sizeof(stack_buffer) - 1,
+        0,
+        true
+    );
+    if (n > 0 && n < static_cast<int>(sizeof(stack_buffer))) {
+        out.assign(stack_buffer, n);
+        return true;
+    }
+
+    if (n == 0) {
+        out.clear();
+        return true;
+    }
+
+    const int required = n < 0 ? -n : n + 1;
+    if (required <= 0 || required > 16384) {
+        return false;
+    }
+
+    std::vector<char> buffer(static_cast<size_t>(required) + 1);
+    n = llama_token_to_piece(
+        g_vocab,
+        token,
+        buffer.data(),
+        static_cast<int>(buffer.size()) - 1,
+        0,
+        true
+    );
+    if (n < 0 || n >= static_cast<int>(buffer.size())) {
+        return false;
+    }
+
+    out.assign(buffer.data(), n);
+    return true;
+}
+
 static bool decode_prompt_tokens(const std::vector<llama_token>& tokens) {
     if (!g_context || tokens.empty()) {
         return false;
@@ -138,6 +211,10 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeInitModel(
     std::lock_guard<std::mutex> lock(g_mutex);
     
     const char* path = env->GetStringUTFChars(model_path, nullptr);
+    if (!path) {
+        throw_java_exception(env, "Model path string could not be read");
+        return JNI_FALSE;
+    }
     
     LOGI("Initializing model: %s", path);
     LOGI("Threads: %d, GPU layers: %d, Context: %d", n_threads, n_gpu_layers, context_size);
@@ -166,8 +243,10 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeInitModel(
     // Load model
     g_model = llama_model_load_from_file(path, model_params);
     if (!g_model) {
-        LOGE("Failed to load model from: %s", path);
+        const std::string error = format_error("Failed to load model from: %s", path);
+        g_vocab = nullptr;
         env->ReleaseStringUTFChars(model_path, path);
+        throw_java_exception(env, error);
         return JNI_FALSE;
     }
     
@@ -183,10 +262,12 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeInitModel(
     
     g_context = llama_init_from_model(g_model, ctx_params);
     if (!g_context) {
-        LOGE("Failed to create context");
+        const std::string error = "Failed to create llama context";
         llama_free_model(g_model);
         g_model = nullptr;
+        g_vocab = nullptr;
         env->ReleaseStringUTFChars(model_path, path);
+        throw_java_exception(env, error);
         return JNI_FALSE;
     }
     
@@ -224,11 +305,15 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
     std::lock_guard<std::mutex> lock(g_mutex);
     
     if (!g_model || !g_context || !g_vocab) {
-        LOGE("Model not loaded");
+        throw_java_exception(env, "Model not loaded");
         return nullptr;
     }
     
     const char* prompt_str = env->GetStringUTFChars(prompt, nullptr);
+    if (!prompt_str) {
+        throw_java_exception(env, "Prompt string could not be read");
+        return nullptr;
+    }
     LOGI("Generating text");
     
     std::string prompt_text(prompt_str);
@@ -239,28 +324,34 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
     // Tokenize prompt
     const int n_prompt = -llama_tokenize(g_vocab, prompt_text.c_str(), prompt_text.size(), NULL, 0, true, true);
     if (n_prompt <= 0) {
-        LOGE("Prompt tokenization returned no tokens");
+        throw_java_exception(env, "Prompt tokenization returned no tokens");
         return nullptr;
     }
     const int n_ctx = llama_n_ctx(g_context);
     if (n_prompt >= n_ctx - 8) {
-        LOGE("Prompt too long: tokens=%d context=%d", n_prompt, n_ctx);
+        throw_java_exception(
+            env,
+            format_error("Prompt too long: tokens=%d context=%d", n_prompt, n_ctx)
+        );
         return nullptr;
     }
     std::vector<llama_token> prompt_tokens(n_prompt);
     
     if (llama_tokenize(g_vocab, prompt_text.c_str(), prompt_text.size(), prompt_tokens.data(), prompt_tokens.size(), true, true) < 0) {
-        LOGE("Failed to tokenize prompt");
+        throw_java_exception(env, "Failed to tokenize prompt");
         return nullptr;
     }
     
     if (!decode_prompt_tokens(prompt_tokens)) {
-        LOGE("Failed to decode prompt");
+        throw_java_exception(env, "Failed to decode prompt");
         return nullptr;
     }
     
     // Update sampler with new parameters
-    llama_sampler_free(g_sampler);
+    if (g_sampler) {
+        llama_sampler_free(g_sampler);
+        g_sampler = nullptr;
+    }
     
     auto sparams = llama_sampler_chain_default_params();
     g_sampler = llama_sampler_chain_init(sparams);
@@ -300,11 +391,13 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
         }
 
         // Convert token to text
-        char token_str[256] = {0};
-        int n = llama_token_to_piece(g_vocab, new_token, token_str, sizeof(token_str) - 1, 0, true);
-        if (n > 0) {
-            token_str[n] = '\0';
-            result.append(token_str);
+        std::string token_piece;
+        if (!token_to_piece(new_token, token_piece)) {
+            throw_java_exception(env, "Failed to convert generated token to text");
+            return nullptr;
+        }
+        if (!token_piece.empty()) {
+            result.append(token_piece);
         }
         
         // Prepare for next iteration
@@ -312,8 +405,8 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
         n_pos++;
         
         if (llama_decode(g_context, batch) != 0) {
-            LOGE("Failed to decode token");
-            break;
+            throw_java_exception(env, "Failed to decode generated token");
+            return nullptr;
         }
         
         n_generated++;
@@ -324,13 +417,13 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
     // Create GenerationResult object
     jclass result_class = env->FindClass("net/nativemind/flutter_llama/FlutterLlamaPlugin$GenerationResult");
     if (!result_class) {
-        LOGE("Failed to find GenerationResult class");
+        throw_java_exception(env, "Failed to find GenerationResult class");
         return nullptr;
     }
     
     jmethodID constructor = env->GetMethodID(result_class, "<init>", "(Ljava/lang/String;I)V");
     if (!constructor) {
-        LOGE("Failed to find GenerationResult constructor");
+        throw_java_exception(env, "Failed to find GenerationResult constructor");
         return nullptr;
     }
     
@@ -341,7 +434,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerate(
 }
 
 // Initialize streaming generation
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
     JNIEnv* env,
     jobject thiz,
@@ -357,8 +450,9 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
     LOGI("Initializing stream generation");
     
     if (!g_model || !g_context || !g_vocab) {
-        LOGE("Model not loaded");
-        return;
+        g_stream_done = true;
+        throw_java_exception(env, "Model not loaded");
+        return JNI_FALSE;
     }
     
     g_should_stop = false;
@@ -368,6 +462,11 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
     g_stream_done = false;
     
     const char* prompt_str = env->GetStringUTFChars(prompt, nullptr);
+    if (!prompt_str) {
+        g_stream_done = true;
+        throw_java_exception(env, "Prompt string could not be read");
+        return JNI_FALSE;
+    }
     std::string prompt_text(prompt_str);
     env->ReleaseStringUTFChars(prompt, prompt_str);
 
@@ -376,24 +475,31 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
     // Tokenize prompt
     const int n_prompt = -llama_tokenize(g_vocab, prompt_text.c_str(), prompt_text.size(), NULL, 0, true, true);
     if (n_prompt <= 0) {
-        LOGE("Prompt tokenization returned no tokens");
-        return;
+        g_stream_done = true;
+        throw_java_exception(env, "Prompt tokenization returned no tokens");
+        return JNI_FALSE;
     }
     const int n_ctx = llama_n_ctx(g_context);
     if (n_prompt >= n_ctx - 8) {
-        LOGE("Prompt too long: tokens=%d context=%d", n_prompt, n_ctx);
-        return;
+        g_stream_done = true;
+        throw_java_exception(
+            env,
+            format_error("Prompt too long: tokens=%d context=%d", n_prompt, n_ctx)
+        );
+        return JNI_FALSE;
     }
     std::vector<llama_token> prompt_tokens(n_prompt);
     
     if (llama_tokenize(g_vocab, prompt_text.c_str(), prompt_text.size(), prompt_tokens.data(), prompt_tokens.size(), true, true) < 0) {
-        LOGE("Failed to tokenize prompt");
-        return;
+        g_stream_done = true;
+        throw_java_exception(env, "Failed to tokenize prompt");
+        return JNI_FALSE;
     }
     
     if (!decode_prompt_tokens(prompt_tokens)) {
-        LOGE("Failed to decode prompt");
-        return;
+        g_stream_done = true;
+        throw_java_exception(env, "Failed to decode prompt");
+        return JNI_FALSE;
     }
     
     // Update sampler
@@ -415,6 +521,7 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamInit(
     g_stream_done = false;
 
     LOGI("Stream generation initialized");
+    return JNI_TRUE;
 }
 
 // Get next token in stream
@@ -445,23 +552,25 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGenerateStreamNext(
             return nullptr;
         }
 
-        char token_str[256] = {0};
-        int n = llama_token_to_piece(g_vocab, new_token, token_str, sizeof(token_str) - 1, 0, true);
+        std::string token_piece;
+        if (!token_to_piece(new_token, token_piece)) {
+            g_stream_done = true;
+            throw_java_exception(env, "Failed to convert generated token to text");
+            return nullptr;
+        }
 
         llama_batch batch = llama_batch_get_one(&new_token, 1);
         g_stream_n_pos++;
         g_stream_generated++;
 
         if (llama_decode(g_context, batch) != 0) {
-            LOGE("Failed to decode stream token");
             g_stream_done = true;
+            throw_java_exception(env, "Failed to decode generated stream token");
             return nullptr;
         }
 
-        if (n > 0) {
-            token_str[n] = '\0';
-            std::string token(token_str);
-            return safe_new_string_utf(env, token);
+        if (!token_piece.empty()) {
+            return safe_new_string_utf(env, token_piece);
         }
     }
 
@@ -506,13 +615,13 @@ Java_net_nativemind_flutter_1llama_FlutterLlamaPlugin_nativeGetModelInfo(
     // Create ModelInfo object
     jclass info_class = env->FindClass("net/nativemind/flutter_llama/FlutterLlamaPlugin$ModelInfo");
     if (!info_class) {
-        LOGE("Failed to find ModelInfo class");
+        throw_java_exception(env, "Failed to find ModelInfo class");
         return nullptr;
     }
     
     jmethodID constructor = env->GetMethodID(info_class, "<init>", "(JII)V");
     if (!constructor) {
-        LOGE("Failed to find ModelInfo constructor");
+        throw_java_exception(env, "Failed to find ModelInfo constructor");
         return nullptr;
     }
     

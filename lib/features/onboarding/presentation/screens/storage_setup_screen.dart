@@ -26,116 +26,91 @@ class StorageSetupScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: EdgeInsets.symmetric(horizontal: 28),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(height: 52),
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentSurface,
-                          borderRadius: BorderRadius.circular(16),
-                          border:
-                              Border.all(color: AppTheme.accentDim, width: 1),
-                        ),
-                        child: Icon(
-                          Icons.auto_awesome_rounded,
-                          color: AppTheme.accent,
-                          size: 28,
-                        ),
-                      ),
-                      SizedBox(height: 28),
-                      Text(
-                        'Select Storage\nLocation',
-                        style: Theme.of(context)
-                            .textTheme
-                            .displayLarge
-                            ?.copyWith(height: 1.15),
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        'Choose where AI models and app data will be stored on your device.',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
-                      ),
-                      SizedBox(height: 32),
-                      _StorageInfoRow(),
-                      SizedBox(height: 28),
-                      if (selectedPath != null)
-                        _SelectedFolderCard(path: selectedPath)
-                      else
-                        _EmptyFolderCard(),
-                      SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _FolderButton(
-                              icon: Icons.folder_open_rounded,
-                              label: 'Choose Folder',
-                              onTap: () => _pickFolder(context, ref),
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: _FolderButton(
-                              icon: Icons.create_new_folder_outlined,
-                              label: 'Create Folder',
-                              onTap: () => _createNewFolder(context, ref),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Spacer(),
-                      SizedBox(height: 34),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: selectedPath != null && !isLoading
-                              ? () => _continue(context, ref)
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.accent,
-                            disabledBackgroundColor: AppTheme.surfaceHighlight,
-                            disabledForegroundColor: AppTheme.textTertiary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: isLoading
-                              ? SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.black,
-                                  ),
-                                )
-                              : Text(
-                                  'Continue',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      SizedBox(height: 28),
-                    ],
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(24, 28, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _OnboardingLogo(),
+              SizedBox(height: 22),
+              Text(
+                'Set up storage',
+                style: Theme.of(context)
+                    .textTheme
+                    .displayLarge
+                    ?.copyWith(height: 1.05),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Choose a folder for models, chats, and local app files. Your data stays on this device.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppTheme.textSecondary,
+                      height: 1.42,
+                    ),
+              ),
+              SizedBox(height: 24),
+              if (selectedPath != null)
+                _SelectedFolderCard(path: selectedPath)
+              else
+                _EmptyFolderCard(),
+              SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _FolderButton(
+                      icon: Icons.folder_open_rounded,
+                      label: 'Choose Folder',
+                      onTap: () => _pickFolder(context, ref),
+                    ),
                   ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: _FolderButton(
+                      icon: Icons.create_new_folder_outlined,
+                      label: 'Create Folder',
+                      onTap: () => _createNewFolder(context, ref),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 20),
+              _StorageNote(),
+              SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: selectedPath != null && !isLoading
+                      ? () => _continue(context, ref)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    disabledBackgroundColor: AppTheme.surfaceHighlight,
+                    disabledForegroundColor: AppTheme.textTertiary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: isLoading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : Text(
+                          'Continue',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ),
     );
@@ -332,55 +307,27 @@ class StorageSetupScreen extends ConsumerWidget {
   }
 }
 
-class _StorageInfoRow extends StatelessWidget {
+class _OnboardingLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _InfoCard(
-            icon: Icons.storage_rounded,
-            label: 'Models',
-            sub: 'GGUF files',
-            color: AppTheme.accent,
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          child: _InfoCard(
-            icon: Icons.chat_bubble_outline_rounded,
-            label: 'History',
-            sub: 'Conversations',
-            color: AppTheme.textSecondary,
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          child: _InfoCard(
-            icon: Icons.tune_rounded,
-            label: 'Config',
-            sub: 'System prompts',
-            color: AppTheme.textPrimary,
-          ),
-        ),
-      ],
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: AppTheme.accentSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.accentDim),
+      ),
+      child: Icon(
+        Icons.auto_awesome_rounded,
+        color: AppTheme.accent,
+        size: 32,
+      ),
     );
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String sub;
-  final Color color;
-
-  const _InfoCard({
-    required this.icon,
-    required this.label,
-    required this.sub,
-    required this.color,
-  });
-
+class _StorageNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -388,26 +335,21 @@ class _InfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: AppTheme.borderSubtle),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 18),
-          SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          Text(
-            sub,
-            style: TextStyle(
-              fontSize: 10,
-              color: AppTheme.textSecondary,
+          Icon(Icons.lock_outline_rounded, size: 16, color: AppTheme.accent),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'You can change this later from Settings. Existing files stay in the folder you choose.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                color: AppTheme.textSecondary,
+              ),
             ),
           ),
         ],
@@ -453,7 +395,7 @@ class _SelectedFolderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Selected Folder',
+                  'Selected folder',
                   style: TextStyle(
                     fontSize: 11,
                     color: AppTheme.accentLight,
@@ -488,7 +430,7 @@ class _EmptyFolderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(12),
@@ -499,12 +441,25 @@ class _EmptyFolderCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.folder_off_outlined,
-              color: AppTheme.textTertiary, size: 20),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceHighlight,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.folder_off_outlined,
+              color: AppTheme.textTertiary,
+              size: 18,
+            ),
+          ),
           SizedBox(width: 12),
-          Text(
-            'No folder selected',
-            style: TextStyle(color: AppTheme.textTertiary, fontSize: 13),
+          Expanded(
+            child: Text(
+              'No storage folder selected',
+              style: TextStyle(color: AppTheme.textTertiary, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -539,12 +494,16 @@ class _FolderButton extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: AppTheme.accent),
             SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.textPrimary,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textPrimary,
+                ),
               ),
             ),
           ],

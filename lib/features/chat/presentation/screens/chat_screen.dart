@@ -115,8 +115,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     setState(() => _isLoadingModel = false);
 
     if (!ok) {
-      setState(() => _modelLoadError =
-          'Failed to load ${model.name}.\nThe GGUF file may be corrupt — try re-downloading.');
+      final detail = inference.lastErrorMessage ??
+          'The GGUF file may be corrupt - try re-downloading.';
+      setState(
+          () => _modelLoadError = 'Failed to load ${model.name}.\n$detail');
       return false;
     }
     return true;
@@ -127,7 +129,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _sendMessage() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _isGenerating) return;
-    await _waitBrieflyForStopCleanup();
+    await _waitForStopCleanup();
     if (!mounted || _isGenerating) return;
 
     final convo = ref
@@ -194,7 +196,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
     _scrollToBottom(force: true);
 
-    await _waitBrieflyForStopCleanup();
+    await _waitForStopCleanup();
     if (!_isRunActive(runId)) {
       await _addInterruptedMessageIfNeeded(assistantMsg);
       return;
@@ -240,7 +242,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           await ref
               .read(messagesProvider(widget.conversationId).notifier)
               .updateMessage(assistantMsg.copyWith(
-                content: 'Error: The model returned no text. Try again.',
+                content: 'The model returned no text. Please try again.',
                 isStreaming: false,
                 isError: true,
               ));
@@ -294,13 +296,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return mounted && _generationRunId == runId && _isGenerating;
   }
 
-  Future<void> _waitBrieflyForStopCleanup() async {
+  Future<void> _waitForStopCleanup() async {
     final stopFuture = _stopFuture;
     if (stopFuture == null) return;
-    await stopFuture.timeout(
-      const Duration(milliseconds: 800),
-      onTimeout: () {},
-    );
+    await stopFuture;
   }
 
   Future<void> _stopGeneration() async {
@@ -329,8 +328,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     late Future<void> trackedCleanup;
     final cleanup = Future<void>(() async {
-      await streamSub?.cancel();
       await ref.read(inferenceServiceProvider).stopGeneration();
+      await streamSub?.cancel();
     });
     trackedCleanup = cleanup.catchError((_) {}).whenComplete(() {
       if (identical(_stopFuture, trackedCleanup)) {
@@ -529,6 +528,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   String _friendlyGenerationError(Object error) {
     final text = error.toString().replaceFirst('Exception: ', '').trim();
+    if (text.contains('The model returned no text')) {
+      return 'The model returned no text. Please try again.';
+    }
     if (text.isEmpty) {
       return 'Generation failed. Try a smaller model or re-download the file.';
     }
@@ -538,7 +540,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String? _systemPromptForLanguage(String? conversationPrompt) {
     final language = ref.read(storageServiceProvider).getSetting<String>(
           HiveConstants.appLanguage,
-          defaultValue: 'Auto',
+          defaultValue: 'English (United States)',
         );
     final parts = <String>[];
     final base = conversationPrompt?.trim();
@@ -547,7 +549,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
     if (language == 'Auto') {
       parts.add(
-        'Reply in the same language as the user. Answer directly. Do not reveal hidden reasoning, chain-of-thought, internal thoughts, thinking notes, or <think> sections.',
+        'Reply in English. Answer directly. Do not reveal hidden reasoning, chain-of-thought, internal thoughts, thinking notes, or <think> sections.',
       );
     } else {
       parts.add(
@@ -641,7 +643,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               child: TextField(
                 controller: _inputCtrl,
-                enabled: !_isGenerating && !_isLoadingModel,
+                enabled: !_isLoadingModel,
                 cursorColor: AppTheme.accent,
                 style: TextStyle(fontSize: 14, color: AppTheme.textPrimary),
                 decoration: InputDecoration(

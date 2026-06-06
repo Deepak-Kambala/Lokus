@@ -280,14 +280,21 @@ class _ConversationTile extends ConsumerWidget {
       context: context,
       backgroundColor: AppTheme.surface,
       barrierColor: Colors.black.withOpacity(0.35),
-      builder: (ctx) => _ConvoOptionsSheet(convo: convo),
+      builder: (ctx) => _ConvoOptionsSheet(
+        convo: convo,
+        drawerContext: context,
+      ),
     );
   }
 }
 
 class _ConvoOptionsSheet extends ConsumerWidget {
   final Conversation convo;
-  const _ConvoOptionsSheet({required this.convo});
+  final BuildContext drawerContext;
+  const _ConvoOptionsSheet({
+    required this.convo,
+    required this.drawerContext,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -341,7 +348,11 @@ class _ConvoOptionsSheet extends ConsumerWidget {
               ),
               onTap: () {
                 Navigator.pop(context);
-                _showRenameDialog(context, ref);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (drawerContext.mounted) {
+                    _showRenameDialog(drawerContext);
+                  }
+                });
               },
             ),
             ListTile(
@@ -394,41 +405,62 @@ class _ConvoOptionsSheet extends ConsumerWidget {
     );
   }
 
-  void _showRenameDialog(BuildContext context, WidgetRef ref) {
+  Future<void> _showRenameDialog(BuildContext context) async {
     final controller = TextEditingController(text: convo.title);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceElevated,
-        title: Text(
-          'Rename Chat',
-          style: TextStyle(color: AppTheme.textPrimary),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          cursorColor: AppTheme.accent,
-          style: TextStyle(color: AppTheme.textPrimary),
-          decoration: InputDecoration(labelText: 'Title'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                ref
-                    .read(conversationsRepositoryProvider)
-                    .renameConversation(convo.id, controller.text);
-                ref.read(conversationsRefreshProvider.notifier).state++;
-              }
-              Navigator.pop(ctx);
-            },
-            child: Text('Save'),
+    final container = ProviderScope.containerOf(context, listen: false);
+    try {
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.surfaceElevated,
+          title: Text(
+            'Rename Chat',
+            style: TextStyle(color: AppTheme.textPrimary),
           ),
-        ],
-      ),
-    );
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            cursorColor: AppTheme.accent,
+            style: TextStyle(color: AppTheme.textPrimary),
+            decoration: InputDecoration(labelText: 'Title'),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _saveRename(ctx, container, controller),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => _saveRename(ctx, container, controller),
+              child: Text('Save'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _saveRename(
+    BuildContext context,
+    ProviderContainer container,
+    TextEditingController controller,
+  ) async {
+    final title = controller.text.trim();
+    if (title.isEmpty) return;
+    await container
+        .read(conversationsRepositoryProvider)
+        .renameConversation(convo.id, title);
+    container.read(conversationsRefreshProvider.notifier).state++;
+    final current = container.read(currentConversationProvider);
+    if (current?.id == convo.id) {
+      final updated =
+          container.read(conversationsRepositoryProvider).getById(convo.id);
+      container.read(currentConversationProvider.notifier).state = updated;
+    }
+    if (context.mounted) {
+      Navigator.pop(context);
+    }
   }
 }
 

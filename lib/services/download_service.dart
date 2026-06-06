@@ -181,8 +181,7 @@ class DownloadService {
         return '';
       }
 
-      // Rename temp to final.
-      await tmpFile.rename(finalPath);
+      await _finalizeDownloadedFile(tmpFile, finalFile);
       _tokens.remove(model.id);
       _paused.remove(model.id);
 
@@ -251,6 +250,35 @@ class DownloadService {
 
   bool isDownloading(String modelId) => _tokens.containsKey(modelId);
   bool isPaused(String modelId) => _paused[modelId] == true;
+
+  Future<void> _finalizeDownloadedFile(File tmpFile, File finalFile) async {
+    try {
+      await tmpFile.rename(finalFile.path);
+      return;
+    } on FileSystemException catch (e, stackTrace) {
+      AppLog.error(
+        '[Download] Rename failed; using copy fallback',
+        e,
+        stackTrace,
+      );
+    }
+
+    if (await finalFile.exists()) {
+      await finalFile.delete();
+    }
+
+    await tmpFile.copy(finalFile.path);
+    if (!await _looksLikeGguf(finalFile)) {
+      if (await finalFile.exists()) {
+        await finalFile.delete();
+      }
+      throw const FileSystemException(
+        'Downloaded file could not be finalized.',
+      );
+    }
+
+    await tmpFile.delete();
+  }
 
   String _friendlyError(DioException e) {
     switch (e.type) {
