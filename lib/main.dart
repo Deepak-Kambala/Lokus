@@ -5,7 +5,6 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -194,10 +193,11 @@ class _SplashScreen extends StatelessWidget {
                 border: Border.all(color: AppTheme.border),
               ),
               child: Center(
-                child: SvgPicture.asset(
-                  'assets/images/splash_logo.svg',
+                child: Image.asset(
+                  'assets/images/logo.png',
                   width: 68,
                   height: 68,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
