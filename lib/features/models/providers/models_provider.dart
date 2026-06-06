@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/repositories/models_repository.dart';
 import '../domain/entities/ai_model.dart';
@@ -63,19 +65,61 @@ class ModelManagerNotifier extends StateNotifier<Map<String, ModelStatus>> {
     );
     _updateState(model.id, ModelStatus.downloading);
 
+    var lastPersistAt = DateTime.fromMillisecondsSinceEpoch(0);
+    var lastPersistedBytes = model.downloadReceivedBytes;
+    var progressPersisting = false;
+    DownloadProgress? queuedProgress;
+
+    Future<void> persistProgress(DownloadProgress prog) async {
+      if (state[model.id] != ModelStatus.downloading) return;
+      if (!_dl.isDownloading(model.id)) return;
+      await _repo.updateModelStatus(
+        modelId: model.id,
+        status: ModelStatus.downloading,
+        progress: prog.progress,
+        speedMbps: prog.speedMbps,
+        etaSeconds: prog.etaSeconds,
+        receivedBytes: prog.receivedBytes,
+        totalBytes: prog.totalBytes,
+      );
+      _ref.read(modelsRefreshProvider.notifier).state++;
+    }
+
+    void scheduleProgressPersist(DownloadProgress prog, {bool force = false}) {
+      final now = DateTime.now();
+      final bytesSinceLast = prog.receivedBytes - lastPersistedBytes;
+      final shouldPersist = force ||
+          now.difference(lastPersistAt).inMilliseconds >= 650 ||
+          bytesSinceLast >= 8 * 1024 * 1024 ||
+          prog.progress >= 0.999;
+      if (!shouldPersist) return;
+
+      lastPersistAt = now;
+      lastPersistedBytes = prog.receivedBytes;
+      queuedProgress = prog;
+      if (progressPersisting) return;
+
+      progressPersisting = true;
+      unawaited(Future<void>(() async {
+        try {
+          while (queuedProgress != null) {
+            final next = queuedProgress!;
+            queuedProgress = null;
+            await persistProgress(next);
+          }
+        } finally {
+          progressPersisting = false;
+          if (queuedProgress != null) {
+            scheduleProgressPersist(queuedProgress!, force: true);
+          }
+        }
+      }));
+    }
+
     await _dl.downloadModel(
       model: model,
-      onProgress: (prog) async {
-        await _repo.updateModelStatus(
-          modelId: model.id,
-          status: ModelStatus.downloading,
-          progress: prog.progress,
-          speedMbps: prog.speedMbps,
-          etaSeconds: prog.etaSeconds,
-          receivedBytes: prog.receivedBytes,
-          totalBytes: prog.totalBytes,
-        );
-        _ref.read(modelsRefreshProvider.notifier).state++;
+      onProgress: (prog) {
+        scheduleProgressPersist(prog);
       },
       onComplete: (localPath) async {
         await _repo.updateModelStatus(

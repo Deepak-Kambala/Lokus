@@ -23,7 +23,9 @@ class EmptyGenerationException implements Exception {
 }
 
 class InferenceService {
-  static const int _defaultContextSize = 2048;
+  static const int _defaultContextSize = 1024;
+  static const double _answerTemperature = 0.25;
+  static const double _fallbackTemperature = 0.05;
 
   final FlutterLlama _llama = FlutterLlama.instance;
   AiModel? _loadedModel;
@@ -89,21 +91,40 @@ class InferenceService {
 
     _isLoading = true;
     try {
-      final configs = [
+      final threads = Platform.numberOfProcessors.clamp(2, 6).toInt();
+      final primaryContext = _contextSizeFor(model);
+      final configs = <LlamaConfig>[
         LlamaConfig(
           modelPath: path,
-          nThreads: 4,
-          nGpuLayers: 0,
-          contextSize: 512,
+          nThreads: threads,
+          nGpuLayers: model.sizeGb <= 1.2 ? 16 : 8,
+          contextSize: primaryContext,
           batchSize: 256,
-          useGpu: false,
+          useGpu: true,
         ),
         LlamaConfig(
           modelPath: path,
-          nThreads: 4,
+          nThreads: threads,
           nGpuLayers: 0,
-          contextSize: 256,
+          contextSize: primaryContext,
           batchSize: 256,
+          useGpu: false,
+        ),
+        if (primaryContext > 1024)
+          LlamaConfig(
+            modelPath: path,
+            nThreads: threads,
+            nGpuLayers: 0,
+            contextSize: 1024,
+            batchSize: 192,
+            useGpu: false,
+          ),
+        LlamaConfig(
+          modelPath: path,
+          nThreads: threads,
+          nGpuLayers: 0,
+          contextSize: 512,
+          batchSize: 128,
           useGpu: false,
         ),
       ];
@@ -178,7 +199,7 @@ class InferenceService {
   Stream<String> generateStream({
     required List<ChatMessage> history,
     required String userMessage,
-    double temperature = 0.7,
+    double temperature = _answerTemperature,
     int maxTokens = 512,
     String? systemPrompt,
   }) async* {
@@ -200,7 +221,12 @@ class InferenceService {
       model: model,
     );
 
-    final temperatures = [temperature <= 0 ? 0.8 : temperature, 0.1];
+    final primaryTemperature =
+        temperature <= 0 ? _answerTemperature : temperature;
+    final temperatures = [
+      primaryTemperature.clamp(0.0, 0.45).toDouble(),
+      _fallbackTemperature,
+    ];
     for (var attempt = 0; attempt < temperatures.length; attempt++) {
       var raw = '';
       var emitted = '';
@@ -210,9 +236,9 @@ class InferenceService {
             prompt: prompt,
             maxTokens: maxTokens,
             temperature: temperatures[attempt],
-            topP: 0.95,
-            topK: 50,
-            repeatPenalty: 1.1,
+            topP: 0.85,
+            topK: 30,
+            repeatPenalty: 1.16,
             stopSequences: _stopSequencesFor(model),
           ),
         )) {
@@ -277,6 +303,12 @@ class InferenceService {
     yield 'The model returned no text. Try rephrasing your message.';
   }
 
+  int _contextSizeFor(AiModel model) {
+    if (model.sizeGb <= 0.85) return 2048;
+    if (model.sizeGb <= 1.25) return 1536;
+    return 1024;
+  }
+
   bool _failLoad({
     required AiModel model,
     required String? path,
@@ -339,35 +371,59 @@ class InferenceService {
     final boundedHistory = _recentHistoryForContext(
       history: history,
       userMessage: userMessage,
-      systemPrompt: systemPrompt,
+      systemPrompt: _effectiveSystemPrompt(systemPrompt, model),
     );
     final id = model.id.toLowerCase();
+    final latestUserMessage = _latestUserMessageForModel(userMessage, model);
     if (id.contains('llama')) {
       return _buildLlamaPrompt(
         history: boundedHistory,
-        userMessage: userMessage,
-        systemPrompt: systemPrompt,
+        userMessage: latestUserMessage,
+        systemPrompt: _effectiveSystemPrompt(systemPrompt, model),
       );
     }
     if (id.contains('gemma')) {
       return _buildGemmaPrompt(
         history: boundedHistory,
-        userMessage: userMessage,
-        systemPrompt: systemPrompt,
+        userMessage: latestUserMessage,
+        systemPrompt: _effectiveSystemPrompt(systemPrompt, model),
       );
     }
     if (id.contains('mistral')) {
       return _buildMistralPrompt(
         history: boundedHistory,
-        userMessage: userMessage,
-        systemPrompt: systemPrompt,
+        userMessage: latestUserMessage,
+        systemPrompt: _effectiveSystemPrompt(systemPrompt, model),
       );
     }
     return _buildChatMlPrompt(
       history: boundedHistory,
-      userMessage: userMessage,
-      systemPrompt: systemPrompt,
+      userMessage: latestUserMessage,
+      systemPrompt: _effectiveSystemPrompt(systemPrompt, model),
     );
+  }
+
+  String _effectiveSystemPrompt(String? systemPrompt, AiModel model) {
+    final parts = <String>[
+      'You are Lokus, a precise local assistant. Follow the latest user request exactly. Answer only what was asked. If the request is ambiguous, ask one concise clarifying question. Do not invent facts, links, files, commands, tool output, or prior conversation details. Do not continue the conversation as the user. Do not reveal hidden reasoning or thinking tags.',
+    ];
+    final custom = systemPrompt?.trim();
+    if (custom != null && custom.isNotEmpty) {
+      parts.add(custom);
+    }
+    if (model.id.toLowerCase().contains('qwen3')) {
+      parts.add('Thinking mode is disabled. Provide the final answer only.');
+    }
+    return parts.join('\n\n');
+  }
+
+  String _latestUserMessageForModel(String userMessage, AiModel model) {
+    final trimmed = userMessage.trim();
+    if (model.id.toLowerCase().contains('qwen3') &&
+        !trimmed.toLowerCase().contains('/no_think')) {
+      return '$trimmed\n/no_think';
+    }
+    return trimmed;
   }
 
   List<ChatMessage> _recentHistoryForContext({
@@ -375,8 +431,8 @@ class InferenceService {
     required String userMessage,
     String? systemPrompt,
   }) {
-    final usableChars = (_loadedContextSize * 3).clamp(1200, 12000);
-    final reserved = userMessage.length + (systemPrompt?.length ?? 0) + 800;
+    final usableChars = (_loadedContextSize * 3.5).round().clamp(1400, 14000);
+    final reserved = userMessage.length + (systemPrompt?.length ?? 0) + 1000;
     var remaining = (usableChars - reserved).clamp(0, usableChars);
     final selected = <ChatMessage>[];
     final candidates = history
@@ -384,7 +440,7 @@ class InferenceService {
         .toList(growable: false);
 
     for (final message in candidates.reversed) {
-      final cost = message.content.length + 80;
+      final cost = message.content.length + 120;
       if (selected.isNotEmpty && cost > remaining) break;
       if (cost > remaining && selected.isEmpty) {
         selected.add(message);
@@ -418,7 +474,7 @@ class InferenceService {
     )) {
       _writeChatMlMessage(buffer, _mapRole(message.role), message.content);
     }
-    _writeChatMlMessage(buffer, 'user', userMessage);
+    _writeChatMlMessage(buffer, 'user', _formatUserMessage(userMessage));
     buffer.write('<|im_start|>assistant\n');
     return buffer.toString();
   }
@@ -451,7 +507,7 @@ class InferenceService {
     }
     buffer
       ..write('<|start_header_id|>user<|end_header_id|>\n\n')
-      ..write(userMessage.trim())
+      ..write(_formatUserMessage(userMessage))
       ..write('<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n');
     return buffer.toString();
   }
@@ -481,7 +537,7 @@ class InferenceService {
     }
     buffer
       ..write('<start_of_turn>user\n')
-      ..write(userMessage.trim())
+      ..write(_formatUserMessage(userMessage))
       ..write('<end_of_turn>\n<start_of_turn>model\n');
     return buffer.toString();
   }
@@ -492,10 +548,6 @@ class InferenceService {
     String? systemPrompt,
   }) {
     final buffer = StringBuffer();
-    final system = systemPrompt?.trim();
-    if (system != null && system.isNotEmpty) {
-      buffer.write('$system\n\n');
-    }
     for (final message in history.where(
       (m) => !m.isStreaming && m.content.trim().isNotEmpty,
     )) {
@@ -505,8 +557,19 @@ class InferenceService {
         buffer.write('${message.content.trim()}</s>\n');
       }
     }
-    buffer.write('[INST] ${userMessage.trim()} [/INST]\n');
+    final system = systemPrompt?.trim();
+    final latestUser = _formatUserMessage(userMessage);
+    if (system != null && system.isNotEmpty) {
+      buffer
+          .write('[INST] <<SYS>>\n$system\n<</SYS>>\n\n$latestUser [/INST]\n');
+    } else {
+      buffer.write('[INST] $latestUser [/INST]\n');
+    }
     return buffer.toString();
+  }
+
+  String _formatUserMessage(String userMessage) {
+    return '${userMessage.trim()}\n\nRespond to this request directly. Stop after the answer.';
   }
 
   void _writeChatMlMessage(StringBuffer buffer, String role, String content) {
@@ -531,16 +594,25 @@ class InferenceService {
 
   List<String> _stopSequencesFor(AiModel model) {
     final id = model.id.toLowerCase();
+    const common = [
+      '\nUser:',
+      '\nuser:',
+      '\nHuman:',
+      '\nhuman:',
+      '<|im_start|>user',
+      '<start_of_turn>user',
+      '<|start_header_id|>user<|end_header_id|>',
+    ];
     if (id.contains('llama')) {
-      return const ['<|eot_id|>', '<|end_of_text|>'];
+      return const ['<|eot_id|>', '<|end_of_text|>', ...common];
     }
     if (id.contains('gemma')) {
-      return const ['<end_of_turn>'];
+      return const ['<end_of_turn>', ...common];
     }
     if (id.contains('mistral')) {
-      return const ['</s>'];
+      return const ['</s>', '[INST]', ...common];
     }
-    return const ['<|im_end|>'];
+    return const ['<|im_end|>', '<|endoftext|>', ...common];
   }
 
   bool _containsStopSequence(String text, AiModel model) {

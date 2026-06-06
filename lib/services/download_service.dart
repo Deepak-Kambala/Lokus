@@ -32,9 +32,15 @@ class DownloadService {
   final StorageService _storageService;
 
   final Dio _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 30),
+    connectTimeout: const Duration(seconds: 20),
+    sendTimeout: const Duration(seconds: 20),
     receiveTimeout: const Duration(hours: 4),
-    headers: const {'User-Agent': 'Mozilla/5.0'},
+    headers: const {
+      'User-Agent': 'Lokus/1.0 (Android; Flutter)',
+      'Accept': 'application/octet-stream,*/*',
+      'Accept-Encoding': 'identity',
+      'Connection': 'keep-alive',
+    },
     // Follow HuggingFace CDN redirects (lfs.githubusercontent.com, etc.)
     followRedirects: true,
     maxRedirects: 10,
@@ -116,9 +122,13 @@ class DownloadService {
           followRedirects: true,
           maxRedirects: 10,
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36',
+            'User-Agent': 'Lokus/1.0 (Android; Flutter)',
+            'Accept': 'application/octet-stream,*/*',
+            'Accept-Encoding': 'identity',
+            'Connection': 'keep-alive',
             if (startByte > 0) 'Range': 'bytes=$startByte-',
           },
+          persistentConnection: true,
         ),
         onReceiveProgress: (received, total) {
           if (_paused[model.id] == true) return;
