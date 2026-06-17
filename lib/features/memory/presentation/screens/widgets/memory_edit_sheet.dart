@@ -290,7 +290,7 @@ class _CategoryPicker extends StatelessWidget {
               ),
             ),
             child: Text(
-              '${c.emoji}  ${c.label}',
+              c.label,
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 12,
