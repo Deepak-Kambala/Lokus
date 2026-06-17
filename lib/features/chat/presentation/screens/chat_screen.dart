@@ -14,6 +14,7 @@ import '../../../../services/storage_service.dart';
 import '../../../../services/web_grounding_service.dart';
 import '../../../conversations/providers/conversations_provider.dart';
 import '../../../chat/domain/entities/chat_message.dart';
+import '../../../memory/domain/services/memory_service.dart';
 import '../../../models/data/repositories/models_repository.dart';
 import '../../../models/domain/entities/ai_model.dart';
 import '../../../models/providers/models_provider.dart';
@@ -249,6 +250,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final history = ref.read(messagesProvider(widget.conversationId));
     final baseSystemPrompt = _systemPromptForLanguage(convo.systemPrompt);
     var systemPrompt = baseSystemPrompt;
+
+    // ── Memory: auto-extract + inject context ──────────────────────────────
+    final memService = ref.read(memoryServiceProvider);
+    // 1. Extract and auto-save explicit memory commands
+    final extracted = memService.extractMemory(text);
+    if (extracted != null) {
+      memService.saveMemory(
+        content: extracted.content,
+        category: extracted.category,
+        importance: extracted.importance,
+        sourceConversationId: widget.conversationId,
+        keywords: extracted.keywords,
+      );
+    }
+    // 2. Retrieve relevant memories and prepend to system prompt
+    final memoryContext = await memService.buildMemoryContext(text);
+    if (memoryContext != null) {
+      systemPrompt = '$memoryContext\n\n${systemPrompt ?? ''}'.trim();
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     final grounding = await ref.read(_webGroundingServiceProvider).ground(text);
     if (!_isRunActive(runId)) {
       await _finalizeInterruptedMessage(assistantId, assistantMsg);

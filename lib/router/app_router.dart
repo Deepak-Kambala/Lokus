@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/chat/presentation/screens/chat_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
+import '../features/memory/presentation/screens/memory_screen.dart';
 import '../features/models/presentation/screens/model_manager_screen.dart';
 import '../features/onboarding/presentation/screens/storage_setup_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
@@ -57,6 +58,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'settings',
         pageBuilder: (context, state) =>
             _slidePage(key: state.pageKey, child: const SettingsScreen()),
+      ),
+      GoRoute(
+        path: '/memory',
+        name: 'memory',
+        pageBuilder: (context, state) =>
+            _slidePage(key: state.pageKey, child: const MemoryScreen()),
       ),
     ],
     errorPageBuilder: (context, state) => _fadePage(

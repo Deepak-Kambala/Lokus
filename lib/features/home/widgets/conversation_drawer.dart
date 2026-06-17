@@ -499,17 +499,34 @@ class _DrawerFooter extends ConsumerWidget {
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppTheme.border)),
       ),
-      child: ListTile(
-        leading: Icon(Icons.settings_outlined, size: 18),
-        title: Text(
-          'Settings',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        onTap: () {
-          Navigator.of(context).pop();
-          context.push('/settings');
-        },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: Icon(Icons.psychology_rounded, size: 18),
+            title: Text(
+              'Memory',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            onTap: () {
+              Navigator.of(context).pop();
+              context.push('/memory');
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.settings_outlined, size: 18),
+            title: Text(
+              'Settings',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            onTap: () {
+              Navigator.of(context).pop();
+              context.push('/settings');
+            },
+          ),
+        ],
       ),
     );
   }
 }
+

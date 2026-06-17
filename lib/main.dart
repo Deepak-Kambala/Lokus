@@ -12,6 +12,7 @@ import 'core/constants/hive_constants.dart';
 import 'features/chat/domain/entities/chat_message.dart';
 import 'features/chat/domain/entities/conversation.dart';
 import 'features/conversations/providers/conversations_provider.dart';
+import 'features/memory/domain/entities/memory_model.dart';
 import 'features/models/domain/entities/ai_model.dart';
 import 'router/app_router.dart';
 import 'shared/theme/app_theme.dart';
@@ -62,12 +63,16 @@ Future<void> _bootstrap() async {
   Hive.registerAdapter(ConversationAdapter());
   Hive.registerAdapter(ChatMessageAdapter());
   Hive.registerAdapter(MessageRoleAdapter());
+  // Memory feature
+  Hive.registerAdapter(MemoryCategoryAdapter());
+  Hive.registerAdapter(MemoryModelAdapter());
 
   // Open boxes
   await Hive.openBox(HiveConstants.settingsBox);
   await Hive.openBox<AiModel>(HiveConstants.modelsBox);
   await Hive.openBox<Conversation>(HiveConstants.conversationsBox);
   await Hive.openBox<ChatMessage>(HiveConstants.messagesBox);
+  await Hive.openBox<MemoryModel>(HiveConstants.memoriesBox);
 
   await _prepareSessionState();
 
